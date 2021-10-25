@@ -29,8 +29,19 @@ struct GEOJsonGeometry {
 #[derive(serde::Serialize)]
 struct GEOJsonProperty {}
 
+#[derive(serde::Serialize)]
 struct Coast {
     coordinates: Vec<Coordinate>,
+}
+
+impl Coast {
+    fn get_first(&self) -> Coordinate {
+        return self.coordinates.first().unwrap().clone();
+    }
+
+    fn get_last(&self) -> Coordinate {
+        return self.coordinates.last().unwrap().clone();
+    }
 }
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
@@ -44,13 +55,6 @@ impl Coordinate {
     fn is_equal(&self, other: &Coordinate) -> bool {
         return self.lon == other.lon && self.lat == other.lat;
     }
-}
-
-#[derive(serde::Serialize)]
-struct ActualCoast {
-    start: Coordinate,
-    last: Coordinate,
-    coordinates: Vec<Coordinate>,
 }
 
 fn main() -> Result<(), Error> {
@@ -98,28 +102,23 @@ fn main() -> Result<(), Error> {
     println!("Found {} ways", coasts.len());
     println!("Finished parsing");
 
-    let mut actual_coasts = Vec::<ActualCoast>::new();
+    let mut actual_coasts = Vec::<Coast>::new();
     let mut current_coast;
     {
         let first_key = coasts.keys().next().unwrap().clone();
         let first_coast = coasts.remove(&first_key).unwrap();
-        current_coast = ActualCoast {
-            start: first_coast.coordinates.first().unwrap().clone(),
-            last: first_coast.coordinates.last().unwrap().clone(),
-            coordinates: first_coast.coordinates.clone(),
-        };
+        current_coast = first_coast
     }
 
     counter = 1;
     loop {
-        while !current_coast.start.is_equal(&current_coast.last) {
-            let coordinate = current_coast.last;
+        while !current_coast.get_first().is_equal(&current_coast.get_last()) {
+            let coordinate = current_coast.get_last();
             if let Some(coast) = coasts.get_mut(&coordinate) {
                 counter += 1;
                 if counter % 1000 == 0 {
                     println!("Merged coasts: {}", counter);
                 }
-                current_coast.last = coast.coordinates.last().unwrap().clone();
                 current_coast.coordinates.append(&mut coast.coordinates);
                 coasts.remove(&coordinate);
             }
@@ -138,11 +137,7 @@ fn main() -> Result<(), Error> {
             println!("Merged coasts: {}", counter);
         }
 
-        current_coast = ActualCoast {
-            start: next_coast.coordinates.first().unwrap().clone(),
-            last: next_coast.coordinates.last().unwrap().clone(),
-            coordinates: next_coast.coordinates.clone(),
-        };
+        current_coast = next_coast;
     }
 
     println!("Found {} actual coasts", actual_coasts.len());
