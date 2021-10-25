@@ -3,6 +3,7 @@ use std::{
     env,
     fs::{self, File},
     io::BufReader,
+    io::BufWriter,
     io::Error,
 };
 
@@ -33,6 +34,7 @@ struct Coast {
 }
 
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(serde::Serialize)]
 struct Coordinate {
     lon: i32,
     lat: i32,
@@ -44,6 +46,7 @@ impl Coordinate {
     }
 }
 
+#[derive(serde::Serialize)]
 struct ActualCoast {
     start: Coordinate,
     last: Coordinate,
@@ -171,8 +174,10 @@ fn main() -> Result<(), Error> {
     }
 
     let output_json = serde_json::to_string(&geo_json)?;
-
     fs::write("coastlines.json", output_json)?;
+
+    let mut buf_writer = BufWriter::new(File::create("coastlines.bin").unwrap());
+    bincode::serialize_into(&mut buf_writer, &actual_coasts).ok();
 
     Ok(())
 }
