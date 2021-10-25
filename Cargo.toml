@@ -1,0 +1,9 @@
+[package]
+name = "ship_routing"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+osmpbfreader = "0.15.0"
+serde = "1.0.130"
+serde_json = "1.0.68"
