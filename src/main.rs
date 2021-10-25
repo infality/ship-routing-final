@@ -29,14 +29,13 @@ struct GEOJsonGeometry {
 struct GEOJsonProperty {}
 
 struct Coast {
-    used: bool,
     coordinates: Vec<Coordinate>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
 struct Coordinate {
-    lon: f64,
-    lat: f64,
+    lon: i32,
+    lat: i32,
 }
 
 impl Coordinate {
@@ -64,7 +63,7 @@ fn main() -> Result<(), Error> {
     let mut pbf = osmpbfreader::OsmPbfReader::new(reader);
 
     let mut nodes = HashMap::<i64, Coordinate>::with_capacity(63000000);
-    let mut coasts = Vec::<Coast>::with_capacity(1000000);
+    let mut coasts = HashMap::<Coordinate, Coast>::with_capacity(1000000);
 
     let mut counter = 0;
     for obj in pbf.iter() {
@@ -77,8 +76,8 @@ fn main() -> Result<(), Error> {
             Ok(osmpbfreader::OsmObj::Node(n)) => drop(nodes.insert(
                 n.id.0,
                 Coordinate {
-                    lon: n.lon(),
-                    lat: n.lat(),
+                    lon: n.decimicro_lon,
+                    lat: n.decimicro_lat,
                 },
             )),
             Ok(osmpbfreader::OsmObj::Way(w)) => {
@@ -86,10 +85,7 @@ fn main() -> Result<(), Error> {
                 for node in w.nodes.iter() {
                     coordinates.push(nodes.get(&node.0).unwrap().clone());
                 }
-                coasts.push(Coast {
-                    used: false,
-                    coordinates,
-                });
+                coasts.insert(coordinates.first().unwrap().clone(), Coast { coordinates });
             }
             _ => continue,
         }
@@ -102,8 +98,8 @@ fn main() -> Result<(), Error> {
     let mut actual_coasts = Vec::<ActualCoast>::new();
     let mut current_coast;
     {
-        let first_coast = coasts.first_mut().unwrap();
-        first_coast.used = true;
+        let first_key = coasts.keys().next().unwrap().clone();
+        let first_coast = coasts.remove(&first_key).unwrap();
         current_coast = ActualCoast {
             start: first_coast.coordinates.first().unwrap().clone(),
             last: first_coast.coordinates.last().unwrap().clone(),
@@ -111,39 +107,33 @@ fn main() -> Result<(), Error> {
         };
     }
 
-    counter = 0;
+    counter = 1;
     loop {
-        println!("Merging coasts: {}", counter);
-        counter += 1;
-
         while !current_coast.start.is_equal(&current_coast.last) {
-            for coast in coasts.iter_mut() {
-                if coast.used {
-                    continue;
+            let coordinate = current_coast.last;
+            if let Some(coast) = coasts.get_mut(&coordinate) {
+                counter += 1;
+                if counter % 1000 == 0 {
+                    println!("Merged coasts: {}", counter);
                 }
-
-                if current_coast
-                    .last
-                    .is_equal(coast.coordinates.first().unwrap())
-                {
-                    coast.used = true;
-                    current_coast.last = coast.coordinates.last().unwrap().clone();
-                    current_coast.coordinates.append(&mut coast.coordinates);
-                } else {
-                    continue;
-                }
-                break;
+                current_coast.last = coast.coordinates.last().unwrap().clone();
+                current_coast.coordinates.append(&mut coast.coordinates);
+                coasts.remove(&coordinate);
             }
         }
 
         actual_coasts.push(current_coast);
 
-        let next_coast = coasts.iter_mut().find(|c| !c.used);
-        if next_coast.is_none() {
+        let next_key = coasts.keys().next();
+        if next_key.is_none() {
             break;
         }
-        let next_coast = next_coast.unwrap();
-        next_coast.used = true;
+        let next_key = next_key.unwrap().clone();
+        let next_coast = coasts.remove(&next_key).unwrap();
+        counter += 1;
+        if counter % 1000 == 0 {
+            println!("Merged coasts: {}", counter);
+        }
 
         current_coast = ActualCoast {
             start: next_coast.coordinates.first().unwrap().clone(),
@@ -164,7 +154,10 @@ fn main() -> Result<(), Error> {
         let mut coordinates = Vec::<[f64; 2]>::new();
 
         for coordinate in actual_coast.coordinates.iter().rev() {
-            coordinates.push([coordinate.lon, coordinate.lat]);
+            coordinates.push([
+                coordinate.lon as f64 / 10000000f64,
+                coordinate.lat as f64 / 10000000f64,
+            ]);
         }
 
         geo_json.features.push(GEOJsonFeature {
