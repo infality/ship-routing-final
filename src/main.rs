@@ -177,7 +177,7 @@ fn main() -> Result<(), Error> {
     fs::write("coastlines.json", output_json)?;
 
     let mut buf_writer = BufWriter::new(File::create("coastlines.bin").unwrap());
-    bincode::serialize_into(&mut buf_writer, &actual_coasts).ok();
+    bincode::serialize_into(&mut buf_writer, &actual_coasts).unwrap();
 
     Ok(())
 }
