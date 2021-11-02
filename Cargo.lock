@@ -45,6 +45,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "extract"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "osmpbfreader",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "flat_map"
 version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,6 +90,14 @@ checksum = "ab90cde24b3319636588d0c35fe03b1333857621051837ed769faefb4c2162e4"
 dependencies = [
  "futures",
  "num_cpus",
+]
+
+[[package]]
+name = "graph_gen"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
 ]
 
 [[package]]
@@ -243,16 +261,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "ship_routing"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "osmpbfreader",
- "serde",
- "serde_json",
 ]
 
 [[package]]

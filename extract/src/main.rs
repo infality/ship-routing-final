@@ -210,6 +210,7 @@ fn main() -> Result<(), Error> {
 
     if args.len() < 2 {
         println!("Please pass a pbf file");
+        return Ok(());
     }
 
     let coasts = Coasts::new_from_pbffile(&args[1]);
