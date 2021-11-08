@@ -7,6 +7,8 @@ use std::{
     io::Error,
 };
 
+const FACTOR: f64 = 10_000_000.0;
+
 #[derive(serde::Serialize)]
 struct GEOJson {
     r#type: &'static str,
@@ -38,6 +40,14 @@ struct Coordinate {
 impl Coordinate {
     fn is_equal(&self, other: &Coordinate) -> bool {
         return self.lon == other.lon && self.lat == other.lat;
+    }
+
+    fn get_lon(&self) -> f64 {
+        self.lon as f64 / FACTOR
+    }
+
+    fn get_lat(&self) -> f64 {
+        self.lat as f64 / FACTOR
     }
 }
 
@@ -146,9 +156,7 @@ impl Coasts {
         println!("Finished merging");
 
         println!("Created {} Coasts", actual_coasts.len());
-        return Coasts {
-            actual_coasts: actual_coasts,
-        };
+        return Coasts { actual_coasts };
     }
 
     fn new_from_binfile(filename: &str) -> Self {
@@ -176,10 +184,7 @@ impl Coasts {
             let mut coordinates = Vec::<[f64; 2]>::new();
 
             for coordinate in actual_coast.coordinates.iter().rev() {
-                coordinates.push([
-                    coordinate.lon as f64 / 10000000f64,
-                    coordinate.lat as f64 / 10000000f64,
-                ]);
+                coordinates.push([coordinate.get_lon(), coordinate.get_lat()]);
             }
 
             geo_json.features.push(GEOJsonFeature {
@@ -204,15 +209,119 @@ struct Node {
 
 impl Node {
     fn generate_nodes() -> Vec<Node> {
-        let nodes = Vec::new();
+        let mut nodes = Vec::new();
 
         // TODO Generate equally distributed nodes
+        for lon in -10..=10 {
+            for lat in -10..=10 {
+                nodes.push(Node {
+                    coordinate: Coordinate {
+                        lon: lon * FACTOR as i32,
+                        lat: lat * FACTOR as i32,
+                    },
+                    is_water: false,
+                });
+            }
+        }
 
         nodes
     }
 
     fn set_water_flag(&mut self, coasts: &Coasts) {
-        // TODO Point-in-polygon test
+        let mut intersections = 0;
+        for coast in coasts.actual_coasts.iter() {
+            for line in 0..coast.coordinates.len() {
+                let first = coast.coordinates[line];
+                let second = coast.coordinates[(line + 1) % coast.coordinates.len()];
+
+                // Handle special case if line is vertical
+                if first.lon == second.lon {
+                    if first.lon == self.coordinate.lon {
+                        intersections += 1;
+                    }
+                    continue;
+                }
+
+                let bearing = calculate_bearing(&first, &second);
+                let intersection = calculate_intersection(&self.coordinate, &first, bearing);
+                if (first.lon <= intersection.lon && intersection.lon <= second.lon)
+                    || (second.lon <= intersection.lon && intersection.lon <= first.lon)
+                {
+                    intersections += 1;
+                }
+            }
+        }
+        self.is_water = intersections % 2 == 0;
+    }
+}
+
+fn calculate_bearing(first: &Coordinate, second: &Coordinate) -> f64 {
+    f64::atan2(
+        (first.get_lon() - second.get_lon()).abs().sin() * second.get_lat().cos(),
+        first.get_lon().cos() * second.get_lon().sin()
+            - first.get_lat().sin()
+                * second.get_lat().cos()
+                * (first.get_lon() - second.get_lon()).abs().cos(),
+    )
+}
+
+fn calculate_intersection(first: &Coordinate, second: &Coordinate, bearing: f64) -> Coordinate {
+    let angular_dist_1_2 = 2.0
+        * f64::asin(f64::sqrt(
+            ((first.get_lat() - second.get_lat()) / 2.0)
+                .abs()
+                .sin()
+                .powi(2)
+                + first.get_lat().cos()
+                    * second.get_lat().cos()
+                    * ((first.get_lon() - second.get_lon()) / 2.0)
+                        .abs()
+                        .sin()
+                        .powi(2),
+        ));
+
+    let bearing_a = f64::acos(
+        (second.get_lat().sin() - first.get_lat().sin() * angular_dist_1_2.cos())
+            / (angular_dist_1_2.sin() * first.get_lat().cos()),
+    );
+    let bearing_b = f64::acos(
+        (first.get_lat().sin() - second.get_lat().sin() * angular_dist_1_2.cos())
+            / (angular_dist_1_2.sin() * second.get_lat().cos()),
+    );
+
+    let bearing_1_2;
+    let bearing_2_1;
+    if f64::sin(second.get_lon() - first.get_lon()) > 0.0 {
+        bearing_1_2 = bearing_a;
+        bearing_2_1 = 2.0 * std::f64::consts::PI - bearing_b;
+    } else {
+        bearing_1_2 = 2.0 * std::f64::consts::PI - bearing_a;
+        bearing_2_1 = bearing_b;
+    }
+
+    let angle_1 = -bearing_1_2;
+    let angle_2 = bearing_2_1 - bearing;
+    let angle_3 = f64::acos(
+        -angle_1.cos() * angle_2.cos() + angle_1.sin() * angle_2.sin() * angular_dist_1_2.cos(),
+    );
+
+    let angular_dist_1_3 = f64::atan2(
+        angular_dist_1_2.sin() * angle_1.sin() * angle_2.sin(),
+        angle_2.cos() + angle_1.cos() * angle_3.cos(),
+    );
+
+    let lat = f64::asin(
+        first.get_lat().sin() * angular_dist_1_3.cos()
+            + first.get_lat().cos() * angular_dist_1_3.sin(),
+    );
+
+    let lon_1_3 = std::f64::consts::PI / 2.0;
+
+    let lon = first.get_lon() + lon_1_3;
+
+    Coordinate {
+        lon: (lon * FACTOR) as i32,
+        lat: (lat * FACTOR) as i32,
     }
 }
 
@@ -235,7 +344,7 @@ fn main() -> Result<(), Error> {
             if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
                 skip_read_pbf = true;
                 file_name = &args[2];
-            } else if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
+            } else if &args[2] == "-s" || &args[2] == "--skip-read-pbf" {
                 file_name = &args[1];
                 skip_read_pbf = true;
             } else {
@@ -250,7 +359,7 @@ fn main() -> Result<(), Error> {
     }
 
     let coasts;
-    if skip_read_pbf {
+    if !skip_read_pbf {
         coasts = Coasts::new_from_pbffile(&file_name);
         coasts.write_to_geojson("coastlines.json");
         coasts.write_to_binfile("coastlines.bin");
