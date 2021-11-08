@@ -7,13 +7,11 @@ use std::{
     io::Error,
 };
 
-
 #[derive(serde::Serialize)]
 struct GEOJson {
     r#type: &'static str,
     features: Vec<GEOJsonFeature>,
 }
-
 
 #[derive(serde::Serialize)]
 struct GEOJsonFeature {
@@ -22,21 +20,16 @@ struct GEOJsonFeature {
     properties: GEOJsonProperty,
 }
 
-
 #[derive(serde::Serialize)]
 struct GEOJsonGeometry {
     r#type: &'static str,
     coordinates: [Vec<[f64; 2]>; 1],
 }
 
-
 #[derive(serde::Serialize)]
 struct GEOJsonProperty {}
 
-
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
-#[derive(serde::Serialize)]
-#[derive(serde::Deserialize)]
+#[derive(Clone, Copy, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Coordinate {
     lon: i32,
     lat: i32,
@@ -48,9 +41,7 @@ impl Coordinate {
     }
 }
 
-
-#[derive(serde::Serialize)]
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Coast {
     coordinates: Vec<Coordinate>,
 }
@@ -64,11 +55,9 @@ impl Coast {
     }
 }
 
-
-#[derive(serde::Serialize)]
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Coasts {
-    actual_coasts: Vec::<Coast>,
+    actual_coasts: Vec<Coast>,
 }
 
 impl Coasts {
@@ -122,7 +111,10 @@ impl Coasts {
 
         counter = 1;
         loop {
-            while !current_coast.get_first().is_equal(&current_coast.get_last()) {
+            while !current_coast
+                .get_first()
+                .is_equal(&current_coast.get_last())
+            {
                 let coordinate = current_coast.get_last();
                 if let Some(coast) = coasts.get_mut(&coordinate) {
                     counter += 1;
@@ -156,13 +148,13 @@ impl Coasts {
         println!("Created {} Coasts", actual_coasts.len());
         return Coasts {
             actual_coasts: actual_coasts,
-        }
+        };
     }
 
     fn new_from_binfile(filename: &str) -> Self {
         println!("Creating Coasts from bin file: {}", filename);
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
-        let coasts:Self = bincode::deserialize_from(&mut buf_reader).unwrap();
+        let coasts: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
         println!("Created {} Coasts", coasts.actual_coasts.len());
         return coasts;
     }
@@ -205,20 +197,71 @@ impl Coasts {
     }
 }
 
+struct Node {
+    coordinate: Coordinate,
+    is_water: bool,
+}
+
+impl Node {
+    fn generate_nodes() -> Vec<Node> {
+        let nodes = Vec::new();
+
+        // TODO Generate equally distributed nodes
+
+        nodes
+    }
+
+    fn set_water_flag(&mut self, coasts: &Coasts) {
+        // TODO Point-in-polygon test
+    }
+}
+
 fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Please pass a pbf file");
-        return Ok(());
+    let file_name;
+    let skip_read_pbf;
+
+    match args.len() {
+        l if l < 2 => {
+            println!("Please pass a pbf file");
+            return Ok(());
+        }
+        l if l == 2 => {
+            file_name = &args[1];
+            skip_read_pbf = false;
+        }
+        l if l == 3 => {
+            if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
+                skip_read_pbf = true;
+                file_name = &args[2];
+            } else if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
+                file_name = &args[1];
+                skip_read_pbf = true;
+            } else {
+                println!("Invalid argument");
+                return Ok(());
+            }
+        }
+        _ => {
+            println!("Too many arguments");
+            return Ok(());
+        }
     }
 
-    let coasts = Coasts::new_from_pbffile(&args[1]);
+    let coasts;
+    if skip_read_pbf {
+        coasts = Coasts::new_from_pbffile(&file_name);
+        coasts.write_to_geojson("coastlines.json");
+        coasts.write_to_binfile("coastlines.bin");
+    } else {
+        coasts = Coasts::new_from_binfile("coastlines.bin");
+    }
 
-    coasts.write_to_geojson("coastlines.json");
-    coasts.write_to_binfile("coastlines.bin");
-
-    let _coasts = Coasts::new_from_binfile("coastlines.bin");
+    let mut nodes = Node::generate_nodes();
+    for node in nodes.iter_mut() {
+        node.set_water_flag(&coasts);
+    }
 
     Ok(())
 }

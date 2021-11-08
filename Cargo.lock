@@ -93,14 +93,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "graph_gen"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "serde",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -218,6 +210,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38bc8cc6a5f2e3655e0899c1b848643b2562f853f114bfec7be120678e3ace05"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "route"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
 ]
 
 [[package]]
