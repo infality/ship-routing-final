@@ -255,7 +255,7 @@ fn main() -> Result<(), Error> {
         coasts.write_to_geojson("coastlines.json");
         coasts.write_to_binfile("coastlines.bin");
     } else {
-        coasts = Coasts::new_from_binfile("coastlines.bin");
+        coasts = Coasts::new_from_binfile(&file_name);
     }
 
     let mut nodes = Node::generate_nodes();
