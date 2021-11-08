@@ -54,6 +54,8 @@ impl Coordinate {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Coast {
     coordinates: Vec<Coordinate>,
+    leftmost: i32,
+    rightmost: i32,
 }
 
 impl Coast {
@@ -98,10 +100,26 @@ impl Coasts {
                 )),
                 Ok(osmpbfreader::OsmObj::Way(w)) => {
                     let mut coordinates = Vec::<Coordinate>::with_capacity(w.nodes.len());
+                    let mut leftmost = i32::MAX;
+                    let mut rightmost = i32::MIN;
                     for node in w.nodes.iter() {
-                        coordinates.push(nodes.get(&node.0).unwrap().clone());
+                        let n = nodes.get(&node.0).unwrap().clone();
+                        coordinates.push(n);
+                        if n.lon < leftmost {
+                            leftmost = n.lon;
+                        }
+                        if n.lon > rightmost {
+                            rightmost = n.lon;
+                        }
                     }
-                    coasts.insert(coordinates.first().unwrap().clone(), Coast { coordinates });
+                    coasts.insert(
+                        coordinates.first().unwrap().clone(),
+                        Coast {
+                            coordinates,
+                            leftmost,
+                            rightmost,
+                        },
+                    );
                 }
                 _ => continue,
             }
@@ -209,9 +227,12 @@ struct Node {
 
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
-        println!("Setting water_flag");
         let mut intersections = 0;
         for coast in coasts.actual_coasts.iter() {
+            if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
+                continue;
+            }
+
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
                 let second = coast.coordinates[(line + 1) % coast.coordinates.len()];
@@ -247,8 +268,8 @@ impl Nodes {
         let mut nodes = Vec::new();
 
         // TODO Generate equally distributed nodes
-        for lon in -10..=10 {
-            for lat in -10..=10 {
+        for lon in 6..=7 {
+            for lat in 4..=5 {
                 nodes.push(Node {
                     coordinate: Coordinate {
                         lon: lon * FACTOR as i32,
@@ -259,7 +280,7 @@ impl Nodes {
             }
         }
 
-        Nodes {nodes}
+        Nodes { nodes }
     }
 
     fn new_generate_not_equally_distributed() -> Nodes {
@@ -279,7 +300,7 @@ impl Nodes {
                 if lon != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lon: - lon * 10000000,
+                            lon: -lon * 10000000,
                             lat: lat * 10000000,
                         },
                         is_water: false,
@@ -289,16 +310,16 @@ impl Nodes {
                     nodes.push(Node {
                         coordinate: Coordinate {
                             lon: lon * 10000000,
-                            lat: - lat * 10000000,
+                            lat: -lat * 10000000,
                         },
                         is_water: false,
                     });
                 }
-                if lon != 0 && lat != 0{
+                if lon != 0 && lat != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lon: - lon * 10000000,
-                            lat: - lat * 10000000,
+                            lon: -lon * 10000000,
+                            lat: -lat * 10000000,
                         },
                         is_water: false,
                     });
@@ -306,7 +327,7 @@ impl Nodes {
             }
         }
 
-        Nodes {nodes}
+        Nodes { nodes }
     }
 
     fn write_to_geojson(&self, filename: &str) {
@@ -317,6 +338,9 @@ impl Nodes {
         };
 
         for node in self.nodes.iter() {
+            if node.is_water {
+                continue;
+            }
             let coordinates = [
                 node.coordinate.lon as f64 / 10000000f64,
                 node.coordinate.lat as f64 / 10000000f64,
@@ -324,7 +348,7 @@ impl Nodes {
 
             geo_json.features.push(GEOJsonFeature {
                 r#type: "Feature",
-                geometry: GEOJsonGeometry{
+                geometry: GEOJsonGeometry {
                     r#type: "Point",
                     coordinates,
                 },
@@ -450,12 +474,19 @@ fn main() -> Result<(), Error> {
     }
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
-    nodes.write_to_geojson("nodes.json");
+    //let mut nodes = Nodes::new_generate_equally_distributed();
 
-    //let mut nodes = Node::generate_nodes();
+    let mut counter = 0;
+    let node_count = nodes.nodes.len();
     for node in nodes.nodes.iter_mut() {
+        if counter % 1000 == 0 {
+            println!("Setting water flags: {}/{}", counter, node_count);
+        }
+        counter += 1;
         node.set_water_flag(&coasts);
     }
+
+    nodes.write_to_geojson("nodes.json");
 
     Ok(())
 }
