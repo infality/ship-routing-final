@@ -10,22 +10,22 @@ use std::{
 const FACTOR: f64 = 10_000_000.0;
 
 #[derive(serde::Serialize)]
-struct GEOJson {
+struct GEOJson<T> {
     r#type: &'static str,
-    features: Vec<GEOJsonFeature>,
+    features: Vec<GEOJsonFeature<T>>,
 }
 
 #[derive(serde::Serialize)]
-struct GEOJsonFeature {
+struct GEOJsonFeature<T> {
     r#type: &'static str,
-    geometry: GEOJsonGeometry,
+    geometry: GEOJsonGeometry<T>,
     properties: GEOJsonProperty,
 }
 
 #[derive(serde::Serialize)]
-struct GEOJsonGeometry {
+struct GEOJsonGeometry<T> {
     r#type: &'static str,
-    coordinates: [Vec<[f64; 2]>; 1],
+    coordinates: T,
 }
 
 #[derive(serde::Serialize)]
@@ -208,26 +208,8 @@ struct Node {
 }
 
 impl Node {
-    fn generate_nodes() -> Vec<Node> {
-        let mut nodes = Vec::new();
-
-        // TODO Generate equally distributed nodes
-        for lon in -10..=10 {
-            for lat in -10..=10 {
-                nodes.push(Node {
-                    coordinate: Coordinate {
-                        lon: lon * FACTOR as i32,
-                        lat: lat * FACTOR as i32,
-                    },
-                    is_water: false,
-                });
-            }
-        }
-
-        nodes
-    }
-
     fn set_water_flag(&mut self, coasts: &Coasts) {
+        println!("Setting water_flag");
         let mut intersections = 0;
         for coast in coasts.actual_coasts.iter() {
             for line in 0..coast.coordinates.len() {
@@ -252,6 +234,106 @@ impl Node {
             }
         }
         self.is_water = intersections % 2 == 0;
+    }
+}
+
+struct Nodes {
+    nodes: Vec<Node>,
+}
+
+impl Nodes {
+    fn new_generate_equally_distributed() -> Nodes {
+        println!("Generating equally distributed nodes");
+        let mut nodes = Vec::new();
+
+        // TODO Generate equally distributed nodes
+        for lon in -10..=10 {
+            for lat in -10..=10 {
+                nodes.push(Node {
+                    coordinate: Coordinate {
+                        lon: lon * FACTOR as i32,
+                        lat: lat * FACTOR as i32,
+                    },
+                    is_water: false,
+                });
+            }
+        }
+
+        Nodes {nodes}
+    }
+
+    fn new_generate_not_equally_distributed() -> Nodes {
+        println!("Generating not equally distributed nodes");
+        let mut nodes = Vec::new();
+
+        // TODO Generate equally distributed nodes
+        for lon in (0..(180 * 1)).step_by(1) {
+            for lat in (0..(90 * 1)).step_by(1) {
+                nodes.push(Node {
+                    coordinate: Coordinate {
+                        lon: lon * 10000000,
+                        lat: lat * 10000000,
+                    },
+                    is_water: false,
+                });
+                if lon != 0 {
+                    nodes.push(Node {
+                        coordinate: Coordinate {
+                            lon: - lon * 10000000,
+                            lat: lat * 10000000,
+                        },
+                        is_water: false,
+                    });
+                }
+                if lat != 0 {
+                    nodes.push(Node {
+                        coordinate: Coordinate {
+                            lon: lon * 10000000,
+                            lat: - lat * 10000000,
+                        },
+                        is_water: false,
+                    });
+                }
+                if lon != 0 && lat != 0{
+                    nodes.push(Node {
+                        coordinate: Coordinate {
+                            lon: - lon * 10000000,
+                            lat: - lat * 10000000,
+                        },
+                        is_water: false,
+                    });
+                }
+            }
+        }
+
+        Nodes {nodes}
+    }
+
+    fn write_to_geojson(&self, filename: &str) {
+        println!("Saving Nodes to geojson file: {}", filename);
+        let mut geo_json = GEOJson {
+            r#type: "FeatureCollection",
+            features: Vec::new(),
+        };
+
+        for node in self.nodes.iter() {
+            let coordinates = [
+                node.coordinate.lon as f64 / 10000000f64,
+                node.coordinate.lat as f64 / 10000000f64,
+            ];
+
+            geo_json.features.push(GEOJsonFeature {
+                r#type: "Feature",
+                geometry: GEOJsonGeometry{
+                    r#type: "Point",
+                    coordinates,
+                },
+                properties: GEOJsonProperty {},
+            });
+        }
+
+        let output_json = serde_json::to_string(&geo_json).unwrap();
+        fs::write(&filename, output_json).unwrap();
     }
 }
 
@@ -367,8 +449,11 @@ fn main() -> Result<(), Error> {
         coasts = Coasts::new_from_binfile(&file_name);
     }
 
-    let mut nodes = Node::generate_nodes();
-    for node in nodes.iter_mut() {
+    let mut nodes = Nodes::new_generate_not_equally_distributed();
+    nodes.write_to_geojson("nodes.json");
+
+    //let mut nodes = Node::generate_nodes();
+    for node in nodes.nodes.iter_mut() {
         node.set_water_flag(&coasts);
     }
 
