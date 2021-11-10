@@ -31,10 +31,10 @@ struct GEOJsonGeometry<T> {
 #[derive(serde::Serialize)]
 struct GEOJsonProperty {}
 
-#[derive(Clone, Copy, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Coordinate {
-    lon: i32,
     lat: i32,
+    lon: i32,
 }
 
 impl Coordinate {
@@ -42,12 +42,12 @@ impl Coordinate {
         return self.lon == other.lon && self.lat == other.lat;
     }
 
-    fn get_lon(&self) -> f64 {
-        self.lon as f64 / FACTOR
+    fn get_lat(&self) -> f64 {
+        to_radians(self.lat as f64 / FACTOR)
     }
 
-    fn get_lat(&self) -> f64 {
-        self.lat as f64 / FACTOR
+    fn get_lon(&self) -> f64 {
+        to_radians(self.lon as f64 / FACTOR)
     }
 }
 
@@ -94,8 +94,8 @@ impl Coasts {
                 Ok(osmpbfreader::OsmObj::Node(n)) => drop(nodes.insert(
                     n.id.0,
                     Coordinate {
-                        lon: n.decimicro_lon,
                         lat: n.decimicro_lat,
+                        lon: n.decimicro_lon,
                     },
                 )),
                 Ok(osmpbfreader::OsmObj::Way(w)) => {
@@ -272,8 +272,8 @@ impl Nodes {
             for lat in 4..=5 {
                 nodes.push(Node {
                     coordinate: Coordinate {
-                        lon: lon * FACTOR as i32,
                         lat: lat * FACTOR as i32,
+                        lon: lon * FACTOR as i32,
                     },
                     is_water: false,
                 });
@@ -292,16 +292,16 @@ impl Nodes {
             for lat in (0..(90 * 1)).step_by(1) {
                 nodes.push(Node {
                     coordinate: Coordinate {
-                        lon: lon * 10000000,
                         lat: lat * 10000000,
+                        lon: lon * 10000000,
                     },
                     is_water: false,
                 });
                 if lon != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lon: -lon * 10000000,
                             lat: lat * 10000000,
+                            lon: -lon * 10000000,
                         },
                         is_water: false,
                     });
@@ -309,8 +309,8 @@ impl Nodes {
                 if lat != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lon: lon * 10000000,
                             lat: -lat * 10000000,
+                            lon: lon * 10000000,
                         },
                         is_water: false,
                     });
@@ -318,8 +318,8 @@ impl Nodes {
                 if lon != 0 && lat != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lon: -lon * 10000000,
                             lat: -lat * 10000000,
+                            lon: -lon * 10000000,
                         },
                         is_water: false,
                     });
@@ -342,8 +342,8 @@ impl Nodes {
                 continue;
             }
             let coordinates = [
-                node.coordinate.lon as f64 / 10000000f64,
                 node.coordinate.lat as f64 / 10000000f64,
+                node.coordinate.lon as f64 / 10000000f64,
             ];
 
             geo_json.features.push(GEOJsonFeature {
@@ -361,14 +361,23 @@ impl Nodes {
     }
 }
 
+fn to_radians(value: f64) -> f64 {
+    value * std::f64::consts::PI / 180.0
+}
+
+fn to_degrees(value: f64) -> f64 {
+    value * 180.0 / std::f64::consts::PI
+}
+
 fn calculate_bearing(first: &Coordinate, second: &Coordinate) -> f64 {
-    f64::atan2(
-        (first.get_lon() - second.get_lon()).abs().sin() * second.get_lat().cos(),
-        first.get_lon().cos() * second.get_lon().sin()
+    let bearing = f64::atan2(
+        (second.get_lon() - first.get_lon()).sin() * second.get_lat().cos(),
+        first.get_lat().cos() * second.get_lat().sin()
             - first.get_lat().sin()
                 * second.get_lat().cos()
-                * (first.get_lon() - second.get_lon()).abs().cos(),
-    )
+                * (second.get_lon() - first.get_lon()).cos(),
+    );
+    (bearing + 2.0 * std::f64::consts::PI) % (2.0 * std::f64::consts::PI)
 }
 
 fn calculate_intersection(first: &Coordinate, second: &Coordinate, bearing: f64) -> Coordinate {
@@ -426,8 +435,8 @@ fn calculate_intersection(first: &Coordinate, second: &Coordinate, bearing: f64)
     let lon = first.get_lon() + lon_1_3;
 
     Coordinate {
-        lon: (lon * FACTOR) as i32,
-        lat: (lat * FACTOR) as i32,
+        lat: to_degrees(lat * FACTOR) as i32,
+        lon: to_degrees(lon * FACTOR) as i32,
     }
 }
 
@@ -489,4 +498,42 @@ fn main() -> Result<(), Error> {
     nodes.write_to_geojson("nodes.json");
 
     Ok(())
+}
+
+#[test]
+fn test_bearing() {
+    assert_eq!(
+        calculate_bearing(
+            &Coordinate {
+                lat: 500000000,
+                lon: 500000000,
+            },
+            &Coordinate {
+                lat: 500000000,
+                lon: 1000000000,
+            }
+        ),
+        to_radians(70.342778)
+    );
+}
+
+#[test]
+fn test_intersection() {
+    assert_eq!(
+        calculate_intersection(
+            &Coordinate {
+                lat: 500000000,
+                lon: 500000000,
+            },
+            &Coordinate {
+                lat: 500000000,
+                lon: 1000000000,
+            },
+            to_radians(32.44)
+        ),
+        Coordinate {
+            lat: 479577780,
+            lon: -1300000000,
+        }
+    );
 }
