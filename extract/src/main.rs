@@ -502,3 +502,37 @@ fn main() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_intersections() {
+    assert_eq!(
+        calculate_intersections(
+            &Coordinate {
+                lat: 330000000,
+                lon: -240000000,
+            },
+            &Coordinate {
+                lat: 520000000,
+                lon: -700000000,
+            },
+            &Coordinate {
+                lat: 490000000,
+                lon: 10000000,
+            },
+            &Coordinate {
+                lat: 460000000,
+                lon: 150000000,
+            },
+        ),
+        (
+            Coordinate {
+                lat: -467105560,
+                lon: 1668375000,
+            },
+            Coordinate {
+                lat: 467105560,
+                lon: -131625000,
+            }
+        )
+    );
+}
