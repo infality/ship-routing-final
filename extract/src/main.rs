@@ -8,6 +8,7 @@ use std::{
 };
 
 const FACTOR: f64 = 10_000_000.0;
+const WATER: Coordinate = Coordinate { lat: 0, lon: 0 };
 
 #[derive(serde::Serialize)]
 struct GEOJson<T> {
@@ -43,11 +44,11 @@ impl Coordinate {
     }
 
     fn get_lat(&self) -> f64 {
-        to_radians(self.lat as f64 / FACTOR)
+        self.lat as f64 / FACTOR
     }
 
     fn get_lon(&self) -> f64 {
-        to_radians(self.lon as f64 / FACTOR)
+        self.lon as f64 / FACTOR
     }
 }
 
@@ -232,7 +233,7 @@ impl Node {
                 continue;
             }
 
-            let mut intersections = 0;
+            let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
                 let second = coast.coordinates[(line + 1) % coast.coordinates.len()];
@@ -240,20 +241,25 @@ impl Node {
                 // Handle special case if line is vertical
                 if first.lon == second.lon {
                     if first.lon == self.coordinate.lon {
-                        intersections += 1;
+                        intersection_count += 1;
                     }
                     continue;
                 }
 
-                let bearing = calculate_bearing(&first, &second);
-                let intersection = calculate_intersection(&self.coordinate, &first, bearing);
-                if (first.lon <= intersection.lon && intersection.lon <= second.lon)
-                    || (second.lon <= intersection.lon && intersection.lon <= first.lon)
+                let intersections =
+                    calculate_intersections(&self.coordinate, &WATER, &first, &second);
+
+                // Check if the intersection is on the coast line
+                if (first.lon <= intersections.0.lon && intersections.0.lon <= second.lon)
+                    || (second.lon <= intersections.0.lon && intersections.0.lon <= first.lon)
+                    || (first.lon <= intersections.1.lon && intersections.1.lon <= second.lon)
+                    || (second.lon <= intersections.1.lon && intersections.1.lon <= first.lon)
                 {
-                    intersections += 1;
+                    intersection_count += 1;
                 }
             }
-            if intersections % 2 == 1 {
+            //println!("{}", intersection_count);
+            if intersection_count % 2 == 1 {
                 println!("X");
                 self.is_water = false;
                 return;
@@ -299,7 +305,7 @@ impl Nodes {
                         lat: lat * 10000000,
                         lon: lon * 10000000,
                     },
-                    is_water: false,
+                    is_water: true,
                 });
                 if lon != 0 {
                     nodes.push(Node {
@@ -307,7 +313,7 @@ impl Nodes {
                             lat: lat * 10000000,
                             lon: -lon * 10000000,
                         },
-                        is_water: false,
+                        is_water: true,
                     });
                 }
                 if lat != 0 {
@@ -316,7 +322,7 @@ impl Nodes {
                             lat: -lat * 10000000,
                             lon: lon * 10000000,
                         },
-                        is_water: false,
+                        is_water: true,
                     });
                 }
                 if lon != 0 && lat != 0 {
@@ -325,7 +331,7 @@ impl Nodes {
                             lat: -lat * 10000000,
                             lon: -lon * 10000000,
                         },
-                        is_water: false,
+                        is_water: true,
                     });
                 }
             }
@@ -369,92 +375,72 @@ fn to_radians(value: f64) -> f64 {
     value * std::f64::consts::PI / 180.0
 }
 
-fn to_signed_degrees(value: f64) -> f64 {
-    let result = value * 180.0 / std::f64::consts::PI;
-    if result > 180.0 {
-        return result - 360.0;
-    }
-    result
+fn to_degrees(value: f64) -> f64 {
+    value * 180.0 / std::f64::consts::PI
 }
 
-fn calculate_bearing(first: &Coordinate, second: &Coordinate) -> f64 {
-    let bearing = f64::atan2(
-        (second.get_lon() - first.get_lon()).sin() * second.get_lat().cos(),
-        first.get_lat().cos() * second.get_lat().sin()
-            - first.get_lat().sin()
-                * second.get_lat().cos()
-                * (second.get_lon() - first.get_lon()).cos(),
-    );
-    (bearing + 2.0 * std::f64::consts::PI) % (2.0 * std::f64::consts::PI)
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
-fn calculate_intersection(first: &Coordinate, second: &Coordinate, bearing: f64) -> Coordinate {
-    let angular_dist_1_2 = 2.0
-        * f64::asin(f64::sqrt(
-            ((second.get_lat() - first.get_lat()) / 2.0).sin().powi(2)
-                + first.get_lat().cos()
-                    * second.get_lat().cos()
-                    * ((second.get_lon() - first.get_lon()) / 2.0).sin().powi(2),
-        ));
+fn calculate_intersections(
+    p1: &Coordinate,
+    p2: &Coordinate,
+    p3: &Coordinate,
+    p4: &Coordinate,
+) -> (Coordinate, Coordinate) {
+    let p1_lat_rad = to_radians(p1.get_lat());
+    let p1_lon_rad = to_radians(p1.get_lon());
+    let p2_lat_rad = to_radians(p2.get_lat());
+    let p2_lon_rad = to_radians(p2.get_lon());
+    let p3_lat_rad = to_radians(p3.get_lat());
+    let p3_lon_rad = to_radians(p3.get_lon());
+    let p4_lat_rad = to_radians(p4.get_lat());
+    let p4_lon_rad = to_radians(p4.get_lon());
 
-    let cos_bearing_a = (second.get_lat().sin() - first.get_lat().sin() * angular_dist_1_2.cos())
-        / (angular_dist_1_2.sin() * first.get_lat().cos());
-    let cos_bearing_b = (first.get_lat().sin() - second.get_lat().sin() * angular_dist_1_2.cos())
-        / (angular_dist_1_2.sin() * second.get_lat().cos());
+    // Convert to vector
+    let v1_x = p1_lat_rad.cos() * p1_lon_rad.cos();
+    let v1_y = p1_lat_rad.cos() * p1_lon_rad.sin();
+    let v1_z = p1_lat_rad.sin();
+    let v2_x = p2_lat_rad.cos() * p2_lon_rad.cos();
+    let v2_y = p2_lat_rad.cos() * p2_lon_rad.sin();
+    let v2_z = p2_lat_rad.sin();
+    let v3_x = p3_lat_rad.cos() * p3_lon_rad.cos();
+    let v3_y = p3_lat_rad.cos() * p3_lon_rad.sin();
+    let v3_z = p3_lat_rad.sin();
+    let v4_x = p4_lat_rad.cos() * p4_lon_rad.cos();
+    let v4_y = p4_lat_rad.cos() * p4_lon_rad.sin();
+    let v4_z = p4_lat_rad.sin();
 
-    // Protect against rounding errors
-    let bearing_a = f64::acos(f64::min(f64::max(cos_bearing_a, -1.0), 1.0));
-    let bearing_b = f64::acos(f64::min(f64::max(cos_bearing_b, -1.0), 1.0));
+    // Get great-circles
+    let gc1 = cross([v1_x, v1_y, v1_z], [v2_x, v2_y, v2_z]);
+    let gc2 = cross([v3_x, v3_y, v3_z], [v4_x, v4_y, v4_z]);
 
-    let bearing_1_2;
-    let bearing_2_1;
-    if f64::sin(second.get_lon() - first.get_lon()) > 0.0 {
-        bearing_1_2 = bearing_a;
-        bearing_2_1 = 2.0 * std::f64::consts::PI - bearing_b;
-    } else {
-        bearing_1_2 = 2.0 * std::f64::consts::PI - bearing_a;
-        bearing_2_1 = bearing_b;
-    }
+    // Get intersection points
+    let c1 = cross(gc1, gc2);
+    let c2 = cross(gc2, gc1);
 
-    let angle_1 = -bearing_1_2;
-    let angle_2 = bearing_2_1 - bearing;
+    // Convert back to lat/lon
+    let lat1 = to_degrees(f64::atan2(c1[2], f64::sqrt(c1[0].powi(2) + c1[1].powi(2))));
+    let lon1 = to_degrees(f64::atan2(c1[1], c1[0]));
+    let lat2 = to_degrees(f64::atan2(c2[2], f64::sqrt(c2[0].powi(2) + c2[1].powi(2))));
+    let lon2 = to_degrees(f64::atan2(c2[1], c2[0]));
 
-    if angle_1.sin() == 0.0 && angle_2.sin() == 0.0 {
-        panic!("infinite intersections");
-    }
-    if angle_1.sin() * angle_2.sin() < 0.0 {
-        //panic!("ambiguous intersection (antipodal?)");
-    }
-
-    let cos_angle_3 =
-        -angle_1.cos() * angle_2.cos() + angle_1.sin() * angle_2.sin() * angular_dist_1_2.cos();
-
-    let angular_dist_1_3 = f64::atan2(
-        angular_dist_1_2.sin() * angle_1.sin() * angle_2.sin(),
-        angle_2.cos() + angle_1.cos() * cos_angle_3,
-    );
-
-    let lat = f64::asin(f64::min(
-        f64::max(
-            first.get_lat().sin() * angular_dist_1_3.cos()
-                + first.get_lat().cos() * angular_dist_1_3.sin(),
-            -1.0,
-        ),
-        1.0,
-    ));
-
-    let delta_lon_1_3 = f64::atan2(
-        0.0,
-        angular_dist_1_3.cos() - first.get_lat().sin() * lat.sin(),
-    );
-
-    let lon = first.get_lon() + delta_lon_1_3;
-
-    //println!("{} | {}", to_signed_degrees(lat), to_signed_degrees(lon));
-    Coordinate {
-        lat: (to_signed_degrees(lat) * FACTOR) as i32,
-        lon: (to_signed_degrees(lon) * FACTOR) as i32,
-    }
+    //println!("{} {} | {} {}", lat1, lon1, lat2, lon2);
+    (
+        Coordinate {
+            lat: (lat1 * FACTOR) as i32,
+            lon: (lon1 * FACTOR) as i32,
+        },
+        Coordinate {
+            lat: (lat2 * FACTOR) as i32,
+            lon: (lon2 * FACTOR) as i32,
+        },
+    )
 }
 
 fn main() -> Result<(), Error> {
@@ -515,42 +501,4 @@ fn main() -> Result<(), Error> {
     nodes.write_to_geojson("nodes.json");
 
     Ok(())
-}
-
-#[test]
-fn test_bearing() {
-    assert_eq!(
-        calculate_bearing(
-            &Coordinate {
-                lat: 500000000,
-                lon: 500000000,
-            },
-            &Coordinate {
-                lat: 500000000,
-                lon: 1000000000,
-            }
-        ),
-        to_radians(70.342778)
-    );
-}
-
-#[test]
-fn test_intersection() {
-    assert_eq!(
-        calculate_intersection(
-            &Coordinate {
-                lat: 500000000,
-                lon: 500000000,
-            },
-            &Coordinate {
-                lat: 500000000,
-                lon: 1000000000,
-            },
-            to_radians(32.44)
-        ),
-        Coordinate {
-            lat: 479577780,
-            lon: -1300000000,
-        }
-    );
 }
