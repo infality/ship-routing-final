@@ -298,8 +298,8 @@ impl Nodes {
         let mut nodes = Vec::new();
 
         // TODO Generate equally distributed nodes
-        for lon in (0..(180 * 1)).step_by(1) {
-            for lat in (0..(90 * 1)).step_by(1) {
+        for lon in (0..(180 * 1 + 1)).step_by(1) {
+            for lat in (0..(90 * 1 + 1)).step_by(1) {
                 nodes.push(Node {
                     coordinate: Coordinate {
                         lat: lat * 10000000,
