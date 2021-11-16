@@ -233,7 +233,7 @@ struct Node {
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
         let mut i = 0;
-        let mut nodes_intersections = Nodes { nodes : vec![] };
+        let mut nodes_intersections = Nodes { nodes: vec![] };
         for coast in coasts.actual_coasts.iter() {
             if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
                 continue;
@@ -256,21 +256,30 @@ impl Node {
                     if first.lon == self.coordinate.lon
                         && i32::max(first.lat, second.lat) >= self.coordinate.lat
                     {
-                        let mut is_prev_left = false;
+                        // Check orientation of surrounding non-vertical coast lines and decide if
+                        // it counts as an intersection
+                        let mut is_prev_right = false;
+                        let mut is_next_right = false;
 
-                        // Check orientation of previous non-vertical coast line
                         for prev_coordinate in 0..(coast.coordinates.len() - 2) {
                             let prev = coast.coordinates
                                 [(line - prev_coordinate) % coast.coordinates.len()];
                             if prev.lon != self.coordinate.lon {
-                                is_prev_left = prev.lon < self.coordinate.lon;
+                                is_prev_right = prev.lon > self.coordinate.lon;
                                 break;
                             }
                         }
 
-                        // If the previous non-vertical coordinate was to the left we are inside
-                        // the polygon
-                        if is_prev_left {
+                        for next_coordinate in 2..coast.coordinates.len() {
+                            let next = coast.coordinates
+                                [(line + next_coordinate) % coast.coordinates.len()];
+                            if next.lon != self.coordinate.lon {
+                                is_next_right = next.lon > self.coordinate.lon;
+                                break;
+                            }
+                        }
+
+                        if is_prev_right != is_next_right {
                             intersection_count += 1;
                         }
                     }
@@ -280,8 +289,8 @@ impl Node {
                 let intersections =
                     calculate_intersections(&self.coordinate, &WATER, &first, &second);
                 nodes_intersections.nodes.push(Node {
-                    coordinate : intersections,
-                    is_water : false,
+                    coordinate: intersections,
+                    is_water: false,
                 });
 
                 println!("{}, {}", intersections.get_lon(), intersections.get_lat());
@@ -536,27 +545,27 @@ fn main() -> Result<(), Error> {
         //coasts.write_to_geojson("coastlines.json");
     }
     coasts = Coasts {
-        actual_coasts : vec![Coast {
-            coordinates : vec![
+        actual_coasts: vec![Coast {
+            coordinates: vec![
                 Coordinate {
-                    lon : -100000000,
-                    lat : 340000000,
+                    lon: -100000000,
+                    lat: 340000000,
                 },
                 Coordinate {
-                    lon : 570000000,
-                    lat : 490000000,
+                    lon: 570000000,
+                    lat: 490000000,
                 },
                 Coordinate {
-                    lon : 126000000,
-                    lat : 200000000,
+                    lon: 126000000,
+                    lat: 200000000,
                 },
                 Coordinate {
-                    lon : 380000000,
-                    lat : -110000000,
+                    lon: 380000000,
+                    lat: -110000000,
                 },
             ],
-            leftmost : -100000000,
-            rightmost : 126000000,
+            leftmost: -100000000,
+            rightmost: 126000000,
         }],
     };
     coasts.write_to_geojson("coastlines-custom.json");
