@@ -233,6 +233,7 @@ struct Node {
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
         let mut i = 0;
+        let mut nodes_intersections = Nodes { nodes : vec![] };
         for coast in coasts.actual_coasts.iter() {
             if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
                 continue;
@@ -278,7 +279,12 @@ impl Node {
 
                 let intersections =
                     calculate_intersections(&self.coordinate, &WATER, &first, &second);
+                nodes_intersections.nodes.push(Node {
+                    coordinate : intersections,
+                    is_water : false,
+                });
 
+                println!("{}, {}", intersections.get_lon(), intersections.get_lat());
                 // Check if the intersection is on the coast line
                 if (first.lon <= intersections.lon && intersections.lon <= second.lon)
                     || (second.lon <= intersections.lon && intersections.lon <= first.lon)
@@ -297,6 +303,7 @@ impl Node {
             }
             i = i + 1;
         }
+        //nodes_intersections.write_to_geojson("intersections.json");
     }
 }
 
