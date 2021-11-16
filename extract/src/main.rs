@@ -233,7 +233,7 @@ struct Node {
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
         let mut i = 0;
-        let mut nodes_intersections = Nodes { nodes: vec![] };
+        let mut nodes_intersections = Nodes { nodes : vec![] };
         for coast in coasts.actual_coasts.iter() {
             if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
                 continue;
@@ -288,31 +288,35 @@ impl Node {
 
                 let intersections =
                     calculate_intersections(&self.coordinate, &WATER, &first, &second);
-                nodes_intersections.nodes.push(Node {
-                    coordinate: intersections,
-                    is_water: false,
-                });
 
-                println!("{}, {}", intersections.get_lon(), intersections.get_lat());
+                //nodes_intersections.nodes.push(Node {
+                //    coordinate : intersections,
+                //    is_water : true,
+                //});
+
+                //println!("{}, {}", intersections.get_lon(), intersections.get_lat());
                 // Check if the intersection is on the coast line
                 if (first.lon <= intersections.lon && intersections.lon <= second.lon)
                     || (second.lon <= intersections.lon && intersections.lon <= first.lon)
                 {
-                    intersection_count += 1;
-                    //println!("yes")
+                    if intersections.lat > self.coordinate.lat {
+                        intersection_count += 1;
+                        //println!("yes")
+                    }
                 } else {
                     //println!("nope")
                 }
             }
             //println!("{}", intersection_count);
             if intersection_count % 2 == 1 {
+                println!("is uneven");
                 //println!("node is inside coastline-polygon {}", i);
                 self.is_water = false;
                 return;
             }
             i = i + 1;
         }
-        //nodes_intersections.write_to_geojson("intersections.json");
+        nodes_intersections.write_to_geojson("intersections.json");
     }
 }
 
@@ -338,6 +342,20 @@ impl Nodes {
             }
         }
 
+        Nodes { nodes }
+    }
+
+    fn new_generate_custom() -> Nodes {
+        println!("Generating not equally distributed nodes");
+        let mut nodes = Vec::new();
+
+        nodes.push(Node {
+            coordinate: Coordinate {
+                lon : 200000000,
+                lat : 300000000,
+            },
+            is_water: true,
+        });
         Nodes { nodes }
     }
 
@@ -544,33 +562,36 @@ fn main() -> Result<(), Error> {
         coasts = Coasts::new_from_binfile(&file_name);
         //coasts.write_to_geojson("coastlines.json");
     }
-    coasts = Coasts {
-        actual_coasts: vec![Coast {
-            coordinates: vec![
-                Coordinate {
-                    lon: -100000000,
-                    lat: 340000000,
-                },
-                Coordinate {
-                    lon: 570000000,
-                    lat: 490000000,
-                },
-                Coordinate {
-                    lon: 126000000,
-                    lat: 200000000,
-                },
-                Coordinate {
-                    lon: 380000000,
-                    lat: -110000000,
-                },
-            ],
-            leftmost: -100000000,
-            rightmost: 126000000,
-        }],
+    let custom_coast = Coast {
+        coordinates : vec![
+            Coordinate {
+                lon : -100000000,
+                lat : 340000000,
+            },
+            Coordinate {
+                lon : 570000000,
+                lat : 490000000,
+            },
+            Coordinate {
+                lon : 126000000,
+                lat : 200000000,
+            },
+            Coordinate {
+                lon : 380000000,
+                lat : -110000000,
+            },
+        ],
+        leftmost : -100000000,
+        rightmost : 570000000,
     };
-    coasts.write_to_geojson("coastlines-custom.json");
+    coasts.actual_coasts.push(custom_coast);
+    //coasts = Coasts {
+    //    actual_coasts : vec![custom_coast],
+    //};
+    //coasts.write_to_geojson("coastlines-custom.json");
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
+    //let mut nodes = Nodes::new_generate_custom();
     nodes.write_to_geojson("grid.json");
 
     //let mut nodes = Nodes::new_generate_equally_distributed();
