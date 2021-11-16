@@ -34,8 +34,8 @@ struct GEOJsonProperty {}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Coordinate {
-    lat: i32,
     lon: i32,
+    lat: i32,
 }
 
 impl Coordinate {
@@ -95,8 +95,8 @@ impl Coasts {
                 Ok(osmpbfreader::OsmObj::Node(n)) => drop(nodes.insert(
                     n.id.0,
                     Coordinate {
-                        lat: n.decimicro_lat,
                         lon: n.decimicro_lon,
+                        lat: n.decimicro_lat,
                     },
                 )),
                 Ok(osmpbfreader::OsmObj::Way(w)) => {
@@ -199,6 +199,7 @@ impl Coasts {
             features: Vec::new(),
         };
 
+        //let actual_coast = &self.actual_coasts[1];
         for actual_coast in self.actual_coasts.iter() {
             let mut coordinates = Vec::<[f64; 2]>::new();
 
@@ -256,6 +257,9 @@ impl Node {
                     || (second.lon <= intersections.1.lon && intersections.1.lon <= first.lon)
                 {
                     intersection_count += 1;
+                    //println!("yes")
+                } else {
+                    //println!("nope")
                 }
             }
             //println!("{}", intersection_count);
@@ -282,8 +286,8 @@ impl Nodes {
             for lat in 4..=5 {
                 nodes.push(Node {
                     coordinate: Coordinate {
-                        lat: lat * FACTOR as i32,
                         lon: lon * FACTOR as i32,
+                        lat: lat * FACTOR as i32,
                     },
                     is_water: true,
                 });
@@ -302,16 +306,16 @@ impl Nodes {
             for lat in (0..(90 * 1 + 1)).step_by(1) {
                 nodes.push(Node {
                     coordinate: Coordinate {
-                        lat: lat * 10000000,
                         lon: lon * 10000000,
+                        lat: lat * 10000000,
                     },
                     is_water: true,
                 });
                 if lon != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lat: lat * 10000000,
                             lon: -lon * 10000000,
+                            lat: lat * 10000000,
                         },
                         is_water: true,
                     });
@@ -319,8 +323,8 @@ impl Nodes {
                 if lat != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lat: -lat * 10000000,
                             lon: lon * 10000000,
+                            lat: -lat * 10000000,
                         },
                         is_water: true,
                     });
@@ -328,8 +332,8 @@ impl Nodes {
                 if lon != 0 && lat != 0 {
                     nodes.push(Node {
                         coordinate: Coordinate {
-                            lat: -lat * 10000000,
                             lon: -lon * 10000000,
+                            lat: -lat * 10000000,
                         },
                         is_water: true,
                     });
@@ -348,12 +352,12 @@ impl Nodes {
         };
 
         for node in self.nodes.iter() {
-            if node.is_water {
+            if !node.is_water {
                 continue;
             }
             let coordinates = [
-                node.coordinate.lat as f64 / 10000000f64,
                 node.coordinate.lon as f64 / 10000000f64,
+                node.coordinate.lat as f64 / 10000000f64,
             ];
 
             geo_json.features.push(GEOJsonFeature {
@@ -483,9 +487,12 @@ fn main() -> Result<(), Error> {
         coasts.write_to_binfile("coastlines.bin");
     } else {
         coasts = Coasts::new_from_binfile(&file_name);
+        coasts.write_to_geojson("coastlines.json");
     }
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
+    nodes.write_to_geojson("grid.json");
+
     //let mut nodes = Nodes::new_generate_equally_distributed();
 
     let mut counter = 0;
@@ -496,6 +503,7 @@ fn main() -> Result<(), Error> {
         }
         counter += 1;
         node.set_water_flag(&coasts);
+        //node.set_water_flag_spherical(&coasts);
     }
 
     nodes.write_to_geojson("nodes.json");
