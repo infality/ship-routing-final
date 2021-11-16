@@ -229,6 +229,7 @@ struct Node {
 
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
+        let mut i = 0;
         for coast in coasts.actual_coasts.iter() {
             if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
                 continue;
@@ -264,10 +265,11 @@ impl Node {
             }
             //println!("{}", intersection_count);
             if intersection_count % 2 == 1 {
-                println!("X");
+                println!("node is inside coastline-polygon {}", i);
                 self.is_water = false;
                 return;
             }
+            i = i + 1;
         }
     }
 }
@@ -397,14 +399,14 @@ fn calculate_intersections(
     p3: &Coordinate,
     p4: &Coordinate,
 ) -> (Coordinate, Coordinate) {
-    let p1_lat_rad = to_radians(p1.get_lat());
     let p1_lon_rad = to_radians(p1.get_lon());
-    let p2_lat_rad = to_radians(p2.get_lat());
+    let p1_lat_rad = to_radians(p1.get_lat());
     let p2_lon_rad = to_radians(p2.get_lon());
-    let p3_lat_rad = to_radians(p3.get_lat());
+    let p2_lat_rad = to_radians(p2.get_lat());
     let p3_lon_rad = to_radians(p3.get_lon());
-    let p4_lat_rad = to_radians(p4.get_lat());
+    let p3_lat_rad = to_radians(p3.get_lat());
     let p4_lon_rad = to_radians(p4.get_lon());
+    let p4_lat_rad = to_radians(p4.get_lat());
 
     // Convert to vector
     let v1_x = p1_lat_rad.cos() * p1_lon_rad.cos();
@@ -437,12 +439,12 @@ fn calculate_intersections(
     //println!("{} {} | {} {}", lat1, lon1, lat2, lon2);
     (
         Coordinate {
-            lat: (lat1 * FACTOR) as i32,
             lon: (lon1 * FACTOR) as i32,
+            lat: (lat1 * FACTOR) as i32,
         },
         Coordinate {
-            lat: (lat2 * FACTOR) as i32,
             lon: (lon2 * FACTOR) as i32,
+            lat: (lat2 * FACTOR) as i32,
         },
     )
 }
@@ -487,7 +489,7 @@ fn main() -> Result<(), Error> {
         coasts.write_to_binfile("coastlines.bin");
     } else {
         coasts = Coasts::new_from_binfile(&file_name);
-        coasts.write_to_geojson("coastlines.json");
+        //coasts.write_to_geojson("coastlines.json");
     }
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
