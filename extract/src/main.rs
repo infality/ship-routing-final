@@ -519,7 +519,7 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    let coasts;
+    let mut coasts;
     if !skip_read_pbf {
         coasts = Coasts::new_from_pbffile(&file_name);
         coasts.write_to_geojson("coastlines.json");
@@ -528,6 +528,31 @@ fn main() -> Result<(), Error> {
         coasts = Coasts::new_from_binfile(&file_name);
         //coasts.write_to_geojson("coastlines.json");
     }
+    coasts = Coasts {
+        actual_coasts : vec![Coast {
+            coordinates : vec![
+                Coordinate {
+                    lon : -100000000,
+                    lat : 340000000,
+                },
+                Coordinate {
+                    lon : 570000000,
+                    lat : 490000000,
+                },
+                Coordinate {
+                    lon : 126000000,
+                    lat : 200000000,
+                },
+                Coordinate {
+                    lon : 380000000,
+                    lat : -110000000,
+                },
+            ],
+            leftmost : -100000000,
+            rightmost : 126000000,
+        }],
+    };
+    coasts.write_to_geojson("coastlines-custom.json");
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
     nodes.write_to_geojson("grid.json");
