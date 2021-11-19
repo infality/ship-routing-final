@@ -108,13 +108,13 @@ impl Coasts {
                     let mut rightmost = i32::MIN;
                     for node in w.nodes.iter() {
                         let n = nodes.get(&node.0).unwrap().clone();
-                        coordinates.push(n);
                         if n.lon < leftmost {
                             leftmost = n.lon;
                         }
                         if n.lon > rightmost {
                             rightmost = n.lon;
                         }
+                        coordinates.push(n);
                     }
                     coasts.insert(
                         coordinates.first().unwrap().clone(),
@@ -233,19 +233,16 @@ struct Node {
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
         let mut i = 0;
-        let mut nodes_intersections = Nodes { nodes : vec![] };
+        let mut nodes_intersections = Nodes { nodes: vec![] };
         for coast in coasts.actual_coasts.iter() {
-            if self.coordinate.lon < coast.leftmost || self.coordinate.lon > coast.rightmost {
-                continue;
-            }
 
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
                 let second = coast.coordinates[(line + 1) % coast.coordinates.len()];
 
-                if (first.lon <= self.coordinate.lon && self.coordinate.lon <= second.lon)
-                    || (second.lon <= self.coordinate.lon && self.coordinate.lon <= first.lon)
+                if (first.lon <= self.coordinate.lon && self.coordinate.lon < second.lon)
+                    || (second.lon < self.coordinate.lon && self.coordinate.lon <= first.lon)
                 {
                 } else {
                     continue;
@@ -253,36 +250,6 @@ impl Node {
 
                 // Handle special case if line is vertical
                 if first.lon == second.lon {
-                    if first.lon == self.coordinate.lon
-                        && i32::max(first.lat, second.lat) >= self.coordinate.lat
-                    {
-                        // Check orientation of surrounding non-vertical coast lines and decide if
-                        // it counts as an intersection
-                        let mut is_prev_right = false;
-                        let mut is_next_right = false;
-
-                        for prev_coordinate in 0..(coast.coordinates.len() - 2) {
-                            let prev = coast.coordinates
-                                [(line - prev_coordinate) % coast.coordinates.len()];
-                            if prev.lon != self.coordinate.lon {
-                                is_prev_right = prev.lon > self.coordinate.lon;
-                                break;
-                            }
-                        }
-
-                        for next_coordinate in 2..coast.coordinates.len() {
-                            let next = coast.coordinates
-                                [(line + next_coordinate) % coast.coordinates.len()];
-                            if next.lon != self.coordinate.lon {
-                                is_next_right = next.lon > self.coordinate.lon;
-                                break;
-                            }
-                        }
-
-                        if is_prev_right != is_next_right {
-                            intersection_count += 1;
-                        }
-                    }
                     continue;
                 }
 
@@ -296,13 +263,13 @@ impl Node {
 
                 //println!("{}, {}", intersections.get_lon(), intersections.get_lat());
                 // Check if the intersection is on the coast line
-                if (first.lon <= intersections.lon && intersections.lon <= second.lon)
-                    || (second.lon <= intersections.lon && intersections.lon <= first.lon)
+                if (first.lon <= intersections.lon && intersections.lon < second.lon)
+                    || (second.lon < intersections.lon && intersections.lon <= first.lon)
                 {
-                    if intersections.lat > self.coordinate.lat {
-                        intersection_count += 1;
-                        //println!("yes")
-                    }
+                    //if intersections.lat > self.coordinate.lat {
+                    intersection_count += 1;
+                    //println!("yes")
+                    //}
                 } else {
                     //println!("nope")
                 }
@@ -316,7 +283,7 @@ impl Node {
             }
             i = i + 1;
         }
-        nodes_intersections.write_to_geojson("intersections.json");
+        //nodes_intersections.write_to_geojson("intersections.json");
     }
 }
 
@@ -351,8 +318,8 @@ impl Nodes {
 
         nodes.push(Node {
             coordinate: Coordinate {
-                lon : 200000000,
-                lat : 300000000,
+                lon: 200000000,
+                lat: 300000000,
             },
             is_water: true,
         });
@@ -491,28 +458,21 @@ fn calculate_intersections(
     let gc2 = cross([v3_x, v3_y, v3_z], [v4_x, v4_y, v4_z]);
 
     // Get intersection points
-    let c1 = cross(gc1, gc2);
-    let c2 = cross(gc2, gc1);
+    let i1 = cross(gc1, gc2);
+    let i2 = cross(gc2, gc1);
 
     // Find nearest intersection and convert back to lat/lon
-    let mid = dot(
-        [
-            v1_x + v2_x + v3_x + v4_x,
-            v1_y + v2_y + v3_y + v4_y,
-            v1_z + v2_z + v3_z + v4_z,
-        ],
-        c1,
-    );
+    let mid = dot(cross(gc1, [v1_x, v1_y, v1_z]), i1);
     if mid > 0.0 {
-        let lat1 = to_degrees(f64::atan2(c1[2], f64::sqrt(c1[0].powi(2) + c1[1].powi(2))));
-        let lon1 = to_degrees(f64::atan2(c1[1], c1[0]));
+        let lat1 = to_degrees(f64::atan2(i1[2], f64::sqrt(i1[0].powi(2) + i1[1].powi(2))));
+        let lon1 = to_degrees(f64::atan2(i1[1], i1[0]));
         Coordinate {
             lon: (lon1 * FACTOR) as i32,
             lat: (lat1 * FACTOR) as i32,
         }
     } else {
-        let lat2 = to_degrees(f64::atan2(c2[2], f64::sqrt(c2[0].powi(2) + c2[1].powi(2))));
-        let lon2 = to_degrees(f64::atan2(c2[1], c2[0]));
+        let lat2 = to_degrees(f64::atan2(i2[2], f64::sqrt(i2[0].powi(2) + i2[1].powi(2))));
+        let lon2 = to_degrees(f64::atan2(i2[1], i2[0]));
         Coordinate {
             lon: (lon2 * FACTOR) as i32,
             lat: (lat2 * FACTOR) as i32,
@@ -563,43 +523,54 @@ fn main() -> Result<(), Error> {
         //coasts.write_to_geojson("coastlines.json");
     }
     let custom_coast = Coast {
-        coordinates : vec![
+        coordinates: vec![
             Coordinate {
-                lon : -100000000,
-                lat : 340000000,
+                lon: -100000000,
+                lat: 340000000,
             },
             Coordinate {
-                lon : 570000000,
-                lat : 490000000,
+                lon: 570000000,
+                lat: 490000000,
             },
             Coordinate {
-                lon : 126000000,
-                lat : 200000000,
+                lon: 126000000,
+                lat: 200000000,
             },
             Coordinate {
-                lon : 380000000,
-                lat : -110000000,
+                lon: 380000000,
+                lat: -110000000,
             },
         ],
-        leftmost : -100000000,
-        rightmost : 570000000,
+        leftmost: -100000000,
+        rightmost: 570000000,
     };
-    coasts.actual_coasts.push(custom_coast);
+    //coasts.actual_coasts.push(custom_coast);
     //coasts = Coasts {
     //    actual_coasts : vec![custom_coast],
     //};
     //coasts.write_to_geojson("coastlines-custom.json");
 
+    for coast in coasts.actual_coasts.iter() {
+        if coast.coordinates.len() > 500000 {
+            println!(
+                "amount:{} left:{} right:{}",
+                coast.coordinates.len(),
+                coast.leftmost,
+                coast.rightmost
+            );
+        }
+    }
+
     let mut nodes = Nodes::new_generate_not_equally_distributed();
     //let mut nodes = Nodes::new_generate_custom();
-    nodes.write_to_geojson("grid.json");
+    //nodes.write_to_geojson("grid.json");
 
     //let mut nodes = Nodes::new_generate_equally_distributed();
 
     let mut counter = 0;
     let node_count = nodes.nodes.len();
     for node in nodes.nodes.iter_mut() {
-        if counter % 1000 == 0 {
+        if counter % 10 == 0 {
             println!("Setting water flags: {}/{}", counter, node_count);
         }
         counter += 1;
