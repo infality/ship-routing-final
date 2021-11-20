@@ -235,7 +235,6 @@ impl Node {
         let mut i = 0;
         let mut nodes_intersections = Nodes { nodes: vec![] };
         for coast in coasts.actual_coasts.iter() {
-
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
@@ -243,6 +242,8 @@ impl Node {
 
                 if (first.lon <= self.coordinate.lon && self.coordinate.lon < second.lon)
                     || (second.lon < self.coordinate.lon && self.coordinate.lon <= first.lon)
+                    || (self.coordinate.get_lon() == 180.0 && second.get_lon() == 180.0)
+                    || (self.coordinate.get_lon() == -180.0 && second.get_lon() == -180.0)
                 {
                 } else {
                     continue;
@@ -252,6 +253,32 @@ impl Node {
                 if first.lon == second.lon {
                     continue;
                 }
+
+                //if smaller_lon < 0 && larger_lon < 0 || smaller_lon >= 0 && larger_lon >= 0 {
+                //    //both lons are negative or positive
+                //    //shortest line between lons is not crossing antimeridian or 0-meridian (no problem)
+                //    if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                //        continue;
+                //    }
+                //}
+                //else {
+                //    //one lon is negative and one lon is positive
+                //    //println!("one is neg one is pos {}, {}", smaller_lon, larger_lon);
+                //    if smaller_lon.abs() + larger_lon.abs() > 180*FACTOR as i32 {
+                //        println!("crossing antimeridian {}, {}", smaller_lon, larger_lon);
+                //        // shortest line between lons is crossing antimeridian (special case)
+                //        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= -180*FACTOR as i32
+                //             || 180*FACTOR as i32 <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                //            continue;
+                //        }
+                //    }
+                //    else {
+                //        // shortest line between lons is crossing 0-meridian (no problem)
+                //        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                //            continue;
+                //        }
+                //    }
+                //}
 
                 let intersections =
                     calculate_intersections(&self.coordinate, &WATER, &first, &second);
@@ -263,13 +290,13 @@ impl Node {
 
                 //println!("{}, {}", intersections.get_lon(), intersections.get_lat());
                 // Check if the intersection is on the coast line
-                if (first.lon <= intersections.lon && intersections.lon < second.lon)
-                    || (second.lon < intersections.lon && intersections.lon <= first.lon)
+                if (first.lon <= intersections.lon + 1 && intersections.lon - 1 < second.lon)
+                    || (second.lon < intersections.lon + 1 && intersections.lon - 1 <= first.lon)
                 {
-                    //if intersections.lat > self.coordinate.lat {
-                    intersection_count += 1;
-                    //println!("yes")
-                    //}
+                    if intersections.lat > self.coordinate.lat {
+                        intersection_count += 1;
+                        //println!("yes")
+                    }
                 } else {
                     //println!("nope")
                 }
@@ -331,8 +358,8 @@ impl Nodes {
         let mut nodes = Vec::new();
 
         // TODO Generate equally distributed nodes
-        for lon in (0..(180 * 1 + 1)).step_by(10) {
-            for lat in (0..(90 * 1 + 1)).step_by(10) {
+        for lon in (0..=180).step_by(10) {
+            for lat in (0..=90).step_by(10) {
                 nodes.push(Node {
                     coordinate: Coordinate {
                         lon: lon * 10000000,
@@ -566,6 +593,15 @@ fn main() -> Result<(), Error> {
     //nodes.write_to_geojson("grid.json");
 
     //let mut nodes = Nodes::new_generate_equally_distributed();
+    /* let mut nodes = Nodes {
+        nodes: vec![Node {
+            coordinate: Coordinate {
+                lon: -180_0000000,
+                lat: 60_0000000,
+            },
+            is_water: true,
+        }],
+    }; */
 
     let mut counter = 0;
     let node_count = nodes.nodes.len();
