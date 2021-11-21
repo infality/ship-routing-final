@@ -272,7 +272,9 @@ impl Node {
                     smaller_lon = second.lon;
                     larger_lon = first.lon;
                 }
-                if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon < larger_lon) {
+                if !(smaller_lon <= self.coordinate.lon
+                    && (self.coordinate.lon < larger_lon || larger_lon == 180_0000000))
+                {
                     // nodes lat is not between the lons of the line
                     continue;
                 }
