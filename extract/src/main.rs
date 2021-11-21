@@ -376,13 +376,25 @@ impl Nodes {
         println!("Generating equally distributed nodes");
         let mut nodes = Vec::new();
 
-        // TODO Generate equally distributed nodes
-        for lon in 6..=7 {
-            for lat in 4..=5 {
+        let node_count = 1000;
+        let a = 1.0 / node_count as f64;
+        let d = f64::sqrt(a);
+        let m_theta = f64::round(std::f64::consts::PI / d);
+        let d_theta = std::f64::consts::PI / m_theta;
+        let d_phi = a / d_theta;
+
+        for m in 0..(m_theta as isize) {
+            let theta = std::f64::consts::PI * (m as f64 + 0.5) / m_theta;
+            let m_phi = f64::round(2.0 * std::f64::consts::PI * theta.sin() / d_phi);
+            for n in 0..(m_phi as isize) {
+                let phi = 2.0 * std::f64::consts::PI * n as f64 / m_phi;
+
+                let lat = theta.to_degrees() - 90.0;
+                let lon = phi.to_degrees() - 180.0;
                 nodes.push(Node {
                     coordinate: Coordinate {
-                        lon: lon * FACTOR as i32,
-                        lat: lat * FACTOR as i32,
+                        lon: (lon * FACTOR) as i32,
+                        lat: (lat * FACTOR) as i32,
                     },
                     is_water: true,
                 });
@@ -641,7 +653,7 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    let mut nodes = Nodes::new_generate_not_equally_distributed();
+    let mut nodes = Nodes::new_generate_equally_distributed();
     //let mut nodes = Nodes::new_generate_custom();
     //nodes.write_to_geojson("grid.json");
 
