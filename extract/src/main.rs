@@ -7,7 +7,7 @@ use std::{
     io::Error,
 };
 // TODO import of rayon does not work
-//use rayon::prelude::*;
+use rayon::prelude::*;
 
 const FACTOR: f64 = 10_000_000.0;
 const WATER: Coordinate = Coordinate {
@@ -239,8 +239,6 @@ impl Node {
             self.is_water = false;
             return;
         }
-        // TODO  parallelize iter with rayon
-        //for coast in coasts.actual_coasts.par_iter() {
         for coast in coasts.actual_coasts.iter() {
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
@@ -270,8 +268,7 @@ impl Node {
                 if first.lon <= second.lon {
                     smaller_lon = first.lon;
                     larger_lon = second.lon;
-                }
-                else {
+                } else {
                     smaller_lon = second.lon;
                     larger_lon = first.lon;
                 }
@@ -287,8 +284,7 @@ impl Node {
                     // node is on the line
                     self.is_water = false;
                     return;
-                }
-                else {
+                } else {
                     let bearing_second_x = east_or_west(tlon_second, tlon_x);
                     let bearing_second_self = east_or_west(tlon_second, tlon_self);
                     if bearing_second_x == -bearing_second_self {
@@ -651,8 +647,8 @@ fn main() -> Result<(), Error> {
     /* let mut nodes = Nodes {
         nodes: vec![Node {
             coordinate: Coordinate {
-                lon: -180_0000000,
-                lat: 60_0000000,
+                lon: 180_0000000,
+                lat: -80_0000000,
             },
             is_water: true,
         }],
@@ -660,50 +656,47 @@ fn main() -> Result<(), Error> {
 
     let mut counter = 0;
     let node_count = nodes.nodes.len();
-    for node in nodes.nodes.iter_mut() {
-        if counter % 10 == 0 {
+    nodes.nodes.par_iter_mut().for_each(|node| {
+        /* if counter % 10 == 0 {
             println!("Setting water flags: {}/{}", counter, node_count);
         }
-        counter += 1;
+        counter += 1; */
         node.set_water_flag(&coasts);
         //node.set_water_flag_spherical(&coasts);
-    }
+    });
 
     nodes.write_to_geojson("nodes.json");
 
     Ok(())
 }
 
-fn transform_lon(p : &Coordinate, q : &Coordinate) -> f64{
+fn transform_lon(p: &Coordinate, q: &Coordinate) -> f64 {
     if p.lat == 900000000 {
         return q.get_lon();
-    }
-    else {
+    } else {
         let plon_rad = p.get_lon().to_radians();
         let plat_rad = p.get_lat().to_radians();
         let qlon_rad = q.get_lon().to_radians();
         let qlat_rad = q.get_lat().to_radians();
         let t = (qlon_rad - plon_rad).sin() * qlat_rad.cos();
-        let b = qlat_rad.sin() * plat_rad.cos() - qlat_rad.cos() * plat_rad.sin() * (qlon_rad - plon_rad).cos();
+        let b = qlat_rad.sin() * plat_rad.cos()
+            - qlat_rad.cos() * plat_rad.sin() * (qlon_rad - plon_rad).cos();
         return f64::atan2(t, b).to_degrees();
     }
 }
 
-fn east_or_west(clon : f64, dlon : f64) -> i32{
+fn east_or_west(clon: f64, dlon: f64) -> i32 {
     let mut del = dlon - clon;
     if del > 180.0 {
         del = del - 360.0;
-    }
-    else if del < -180.0 {
+    } else if del < -180.0 {
         del = del + 360.0;
     }
     if del > 0.0 && del != 180.0 {
         return -1;
-    }
-    else if del < 0.0 && del != -180.0 {
+    } else if del < 0.0 && del != -180.0 {
         return 1;
-    }
-    else {
+    } else {
         return 0;
     }
 }

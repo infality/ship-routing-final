@@ -100,6 +100,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "osmpbfreader",
+ "rayon",
  "serde",
  "serde_json",
 ]
@@ -307,7 +308,6 @@ name = "route"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "rayon",
  "serde",
 ]
 
