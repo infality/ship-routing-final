@@ -6,6 +6,8 @@ use std::{
     io::BufWriter,
     io::Error,
 };
+// TODO import of rayon does not work
+//use rayon::prelude::*;
 
 const FACTOR: f64 = 10_000_000.0;
 const WATER: Coordinate = Coordinate {
@@ -237,6 +239,8 @@ impl Node {
             self.is_water = false;
             return;
         }
+        // TODO  parallelize iter with rayon
+        //for coast in coasts.actual_coasts.par_iter() {
         for coast in coasts.actual_coasts.iter() {
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
