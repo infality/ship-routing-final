@@ -156,6 +156,14 @@ impl Coasts {
                         println!("Merged coasts: {}", counter);
                     }
                     current_coast.coordinates.append(&mut coast.coordinates);
+
+                    if coast.leftmost < current_coast.leftmost {
+                        current_coast.leftmost = coast.leftmost;
+                    }
+                    if coast.rightmost > current_coast.rightmost {
+                        current_coast.rightmost = coast.rightmost;
+                    }
+
                     coasts.remove(&coordinate);
                 }
             }
@@ -240,6 +248,10 @@ impl Node {
             return;
         }
         for coast in coasts.actual_coasts.iter() {
+            if !(coast.leftmost <= self.coordinate.lon && self.coordinate.lon <= coast.rightmost) {
+                continue;
+            }
+
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
