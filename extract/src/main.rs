@@ -232,83 +232,134 @@ struct Node {
 
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
-        let mut i = 0;
-        let mut nodes_intersections = Nodes { nodes: vec![] };
+        // check if node is on southpole. this is a special case we can't handle with our algorithm
+        if self.coordinate.lat == -900000000 {
+            self.is_water = false;
+            return;
+        }
         for coast in coasts.actual_coasts.iter() {
             let mut intersection_count = 0;
             for line in 0..coast.coordinates.len() {
                 let first = coast.coordinates[line];
                 let second = coast.coordinates[(line + 1) % coast.coordinates.len()];
 
-                if (first.lon <= self.coordinate.lon && self.coordinate.lon < second.lon)
-                    || (second.lon < self.coordinate.lon && self.coordinate.lon <= first.lon)
-                    || (self.coordinate.get_lon() == 180.0 && second.get_lon() == 180.0)
-                    || (self.coordinate.get_lon() == -180.0 && second.get_lon() == -180.0)
-                {
-                } else {
-                    continue;
-                }
+                // continue if line is south of us (works but does not improve performance at all)
+                //if first.lat < self.coordinate.lat && second.lat < self.coordinate.lat {
+                //    continue;
+                //}
 
-                // Handle special case if line is vertical
+                // handle special case if line is vertical
                 if first.lon == second.lon {
                     continue;
                 }
 
-                //if smaller_lon < 0 && larger_lon < 0 || smaller_lon >= 0 && larger_lon >= 0 {
-                //    //both lons are negative or positive
-                //    //shortest line between lons is not crossing antimeridian or 0-meridian (no problem)
-                //    if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
-                //        continue;
-                //    }
-                //}
-                //else {
-                //    //one lon is negative and one lon is positive
-                //    //println!("one is neg one is pos {}, {}", smaller_lon, larger_lon);
-                //    if smaller_lon.abs() + larger_lon.abs() > 180*FACTOR as i32 {
-                //        println!("crossing antimeridian {}, {}", smaller_lon, larger_lon);
-                //        // shortest line between lons is crossing antimeridian (special case)
-                //        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= -180*FACTOR as i32
-                //             || 180*FACTOR as i32 <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
-                //            continue;
-                //        }
-                //    }
-                //    else {
-                //        // shortest line between lons is crossing 0-meridian (no problem)
-                //        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
-                //            continue;
-                //        }
-                //    }
-                //}
-
-                let intersections =
-                    calculate_intersections(&self.coordinate, &WATER, &first, &second);
-
-                //nodes_intersections.nodes.push(Node {
-                //    coordinate : intersections,
-                //    is_water : true,
-                //});
-
-                //println!("{}, {}", intersections.get_lon(), intersections.get_lat());
-                // Check if the intersection is on the coast line
-                if (first.lon <= intersections.lon + 1 && intersections.lon - 1 < second.lon)
-                    || (second.lon < intersections.lon + 1 && intersections.lon - 1 <= first.lon)
-                {
-                    if intersections.lat > self.coordinate.lat {
-                        intersection_count += 1;
-                        //println!("yes")
-                    }
-                } else {
-                    //println!("nope")
+                // handle special case if node is on the first vertex
+                if self.coordinate.lat == first.lat && self.coordinate.lon == first.lon {
+                    self.is_water = false;
+                    return;
                 }
+
+                // continue if our lon is not between the lines small and large lon
+                // (correct) assumtion: no line crosses the antimeridian at lon 180 / -180
+                let smaller_lon;
+                let larger_lon;
+                if first.lon <= second.lon {
+                    smaller_lon = first.lon;
+                    larger_lon = second.lon;
+                }
+                else {
+                    smaller_lon = second.lon;
+                    larger_lon = first.lon;
+                }
+                if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon < larger_lon) {
+                    // nodes lat is not between the lons of the line
+                    continue;
+                }
+
+                let tlon_x = transform_lon(&first, &WATER);
+                let tlon_second = transform_lon(&first, &second);
+                let tlon_self = transform_lon(&first, &self.coordinate);
+                if tlon_self == tlon_second {
+                    // node is on the line
+                    self.is_water = false;
+                    return;
+                }
+                else {
+                    let bearing_second_x = east_or_west(tlon_second, tlon_x);
+                    let bearing_second_self = east_or_west(tlon_second, tlon_self);
+                    if bearing_second_x == -bearing_second_self {
+                        intersection_count += 1;
+                    }
+                }
+
+                //if (first.lon <= self.coordinate.lon && self.coordinate.lon < second.lon)
+                //    || (second.lon < self.coordinate.lon && self.coordinate.lon <= first.lon)
+                //    || (self.coordinate.get_lon() == 180.0 && second.get_lon() == 180.0)
+                //    || (self.coordinate.get_lon() == -180.0 && second.get_lon() == -180.0)
+                //{
+                //} else {
+                //    continue;
+                //}
+
+                //// Handle special case if line is vertical
+                //if first.lon == second.lon {
+                //    continue;
+                //}
+
+                ////if smaller_lon < 0 && larger_lon < 0 || smaller_lon >= 0 && larger_lon >= 0 {
+                ////    //both lons are negative or positive
+                ////    //shortest line between lons is not crossing antimeridian or 0-meridian (no problem)
+                ////    if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                ////        continue;
+                ////    }
+                ////}
+                ////else {
+                ////    //one lon is negative and one lon is positive
+                ////    //println!("one is neg one is pos {}, {}", smaller_lon, larger_lon);
+                ////    if smaller_lon.abs() + larger_lon.abs() > 180*FACTOR as i32 {
+                ////        println!("crossing antimeridian {}, {}", smaller_lon, larger_lon);
+                ////        // shortest line between lons is crossing antimeridian (special case)
+                ////        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= -180*FACTOR as i32
+                ////             || 180*FACTOR as i32 <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                ////            continue;
+                ////        }
+                ////    }
+                ////    else {
+                ////        // shortest line between lons is crossing 0-meridian (no problem)
+                ////        if !(smaller_lon <= self.coordinate.lon && self.coordinate.lon <= larger_lon) {
+                ////            continue;
+                ////        }
+                ////    }
+                ////}
+
+                //let intersections =
+                //    calculate_intersections(&self.coordinate, &WATER, &first, &second);
+
+                ////nodes_intersections.nodes.push(Node {
+                ////    coordinate : intersections,
+                ////    is_water : true,
+                ////});
+
+                ////println!("{}, {}", intersections.get_lon(), intersections.get_lat());
+                //// Check if the intersection is on the coast line
+                //if (first.lon <= intersections.lon + 1 && intersections.lon - 1 < second.lon)
+                //    || (second.lon < intersections.lon + 1 && intersections.lon - 1 <= first.lon)
+                //{
+                //    if intersections.lat > self.coordinate.lat {
+                //        intersection_count += 1;
+                //        //println!("yes")
+                //    }
+                //} else {
+                //    //println!("nope")
+                //}
             }
             //println!("{}", intersection_count);
             if intersection_count % 2 == 1 {
-                println!("is uneven");
+                //println!("is uneven");
                 //println!("node is inside coastline-polygon {}", i);
                 self.is_water = false;
                 return;
             }
-            i = i + 1;
         }
         //nodes_intersections.write_to_geojson("intersections.json");
     }
@@ -617,6 +668,40 @@ fn main() -> Result<(), Error> {
     nodes.write_to_geojson("nodes.json");
 
     Ok(())
+}
+
+fn transform_lon(p : &Coordinate, q : &Coordinate) -> f64{
+    if p.lat == 900000000 {
+        return q.get_lon();
+    }
+    else {
+        let plon_rad = p.get_lon().to_radians();
+        let plat_rad = p.get_lat().to_radians();
+        let qlon_rad = q.get_lon().to_radians();
+        let qlat_rad = q.get_lat().to_radians();
+        let t = (qlon_rad - plon_rad).sin() * qlat_rad.cos();
+        let b = qlat_rad.sin() * plat_rad.cos() - qlat_rad.cos() * plat_rad.sin() * (qlon_rad - plon_rad).cos();
+        return f64::atan2(t, b).to_degrees();
+    }
+}
+
+fn east_or_west(clon : f64, dlon : f64) -> i32{
+    let mut del = dlon - clon;
+    if del > 180.0 {
+        del = del - 360.0;
+    }
+    else if del < -180.0 {
+        del = del + 360.0;
+    }
+    if del > 0.0 && del != 180.0 {
+        return -1;
+    }
+    else if del < 0.0 && del != -180.0 {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 #[test]
