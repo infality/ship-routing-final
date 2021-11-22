@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::{
     collections::HashMap,
     env,
@@ -6,11 +7,11 @@ use std::{
     io::BufWriter,
     io::Error,
 };
-use rayon::prelude::*;
 
+const FACTOR_INT: i32 = 10_000_000;
 const FACTOR: f64 = 10_000_000.0;
 const WATER: Coordinate = Coordinate {
-    lat: 900000000,
+    lat: 90 * FACTOR_INT,
     lon: 0,
 };
 
@@ -241,7 +242,7 @@ struct Node {
 impl Node {
     fn set_water_flag(&mut self, coasts: &Coasts) {
         // check if node is on southpole. this is a special case we can't handle with our algorithm
-        if self.coordinate.lat == -900000000 {
+        if self.coordinate.lat == -90 * FACTOR_INT {
             self.is_water = false;
             return;
         }
@@ -283,7 +284,7 @@ impl Node {
                     larger_lon = first.lon;
                 }
                 if !(smaller_lon <= self.coordinate.lon
-                    && (self.coordinate.lon < larger_lon || larger_lon == 180_0000000))
+                    && (self.coordinate.lon < larger_lon || larger_lon == 180 * FACTOR_INT))
                 {
                     // nodes lat is not between the lons of the line
                     continue;
@@ -353,45 +354,17 @@ impl Nodes {
         println!("Generating not equally distributed nodes");
         let mut nodes = Vec::new();
 
-        for lon in (0..=180).step_by(10) {
-            for lat in (0..=90).step_by(10) {
+        for lon in (-180 * FACTOR_INT..180 * FACTOR_INT).step_by((360.0 * FACTOR / 500.0) as usize)
+        {
+            for lat in
+                (-90 * FACTOR_INT..90 * FACTOR_INT).step_by((180.0 * FACTOR / 300.0) as usize)
+            {
                 nodes.push(Node {
-                    coordinate: Coordinate {
-                        lon: lon * 10000000,
-                        lat: lat * 10000000,
-                    },
+                    coordinate: Coordinate { lon, lat },
                     is_water: true,
                 });
-                if lon != 0 {
-                    nodes.push(Node {
-                        coordinate: Coordinate {
-                            lon: -lon * 10000000,
-                            lat: lat * 10000000,
-                        },
-                        is_water: true,
-                    });
-                }
-                if lat != 0 {
-                    nodes.push(Node {
-                        coordinate: Coordinate {
-                            lon: lon * 10000000,
-                            lat: -lat * 10000000,
-                        },
-                        is_water: true,
-                    });
-                }
-                if lon != 0 && lat != 0 {
-                    nodes.push(Node {
-                        coordinate: Coordinate {
-                            lon: -lon * 10000000,
-                            lat: -lat * 10000000,
-                        },
-                        is_water: true,
-                    });
-                }
             }
         }
-
         Nodes { nodes }
     }
 
@@ -407,8 +380,8 @@ impl Nodes {
                 continue;
             }
             let coordinates = [
-                node.coordinate.lon as f64 / 10000000f64,
-                node.coordinate.lat as f64 / 10000000f64,
+                node.coordinate.lon as f64 / FACTOR,
+                node.coordinate.lat as f64 / FACTOR,
             ];
 
             geo_json.features.push(GEOJsonFeature {
@@ -427,7 +400,7 @@ impl Nodes {
 }
 
 fn transform_lon(p: &Coordinate, q: &Coordinate) -> f64 {
-    if p.lat == 900000000 {
+    if p.lat == 90 * FACTOR_INT {
         return q.get_lon();
     } else {
         let plon_rad = p.get_lon().to_radians();
@@ -500,28 +473,9 @@ fn main() -> Result<(), Error> {
         //coasts.write_to_geojson("coastlines.json");
     }
 
-    for coast in coasts.actual_coasts.iter() {
-        if coast.coordinates.len() > 500000 {
-            println!(
-                "amount:{} left:{} right:{}",
-                coast.coordinates.len(),
-                coast.leftmost,
-                coast.rightmost
-            );
-        }
-    }
+    let mut nodes = Nodes::new_generate_not_equally_distributed();
 
-    let mut nodes = Nodes::new_generate_equally_distributed();
-    //let mut nodes = Nodes::new_generate_custom();
-    //nodes.write_to_geojson("grid.json");
-
-    //let mut counter = 0;
-    //let node_count = nodes.nodes.len();
     nodes.nodes.par_iter_mut().for_each(|node| {
-        /* if counter % 10 == 0 {
-            println!("Setting water flags: {}/{}", counter, node_count);
-        }
-        counter += 1; */
         node.set_water_flag(&coasts);
     });
 
