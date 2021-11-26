@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 serde = "1.0.130"
 bincode = "1.3.3"
+rouille = "3.4.0"
+
