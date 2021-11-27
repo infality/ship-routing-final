@@ -1,11 +1,6 @@
 use rouille::Response;
 use std::env;
-use std:: {
-    fs::File,
-    io::Read,
-    io::BufReader,
-    io::BufWriter,
-};
+use std::{fs::File, io::BufReader, io::BufWriter, io::Read};
 
 // TODO import Nodes and Node from module extract
 //mod extract;
@@ -20,12 +15,21 @@ struct Graph {
 }
 
 impl Graph {
-    fn new_from_nodes(&self, nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph {
+    fn new_from_nodes(
+        &self,
+        nodes: Nodes,
+        raster_colums_count: usize,
+        raster_rows_count: usize,
+    ) -> Graph {
         let mut nodes_is_water = Vec::new();
         for node in nodes.iter() {
-            nodes_is_water.push(node.is_water)   
-        };
-        Graph { nodes_is_water, raster_colums_count, raster_rows_count }
+            nodes_is_water.push(node.is_water)
+        }
+        Graph {
+            nodes_is_water,
+            raster_colums_count,
+            raster_rows_count,
+        }
     }
 
     fn new_from_binfile(filename: &str) -> Self {
@@ -47,16 +51,16 @@ impl Graph {
     }
 
     fn get_neighbour_top(&self, i: usize) -> usize {
-       return (i + 1) % (self.raster_colums_count * self.raster_rows_count);
+        return (i + 1) % (self.raster_colums_count * self.raster_rows_count);
     }
     fn get_neighbour_bottom(&self, i: usize) -> usize {
-       return (i - 1) % (self.raster_colums_count * self.raster_rows_count);
+        return (i - 1) % (self.raster_colums_count * self.raster_rows_count);
     }
     fn get_neighbour_right(&self, i: usize) -> usize {
-       return (i + self.raster_rows_count) % (self.raster_colums_count * self.raster_rows_count);
+        return (i + self.raster_rows_count) % (self.raster_colums_count * self.raster_rows_count);
     }
     fn get_neighbour_left(&self, i: usize) -> usize {
-       return (i - self.raster_rows_count) % (self.raster_colums_count * self.raster_rows_count);
+        return (i - self.raster_rows_count) % (self.raster_colums_count * self.raster_rows_count);
     }
 
     fn get_neighbours_in_water(&self, i: usize) -> Vec<usize> {
@@ -88,10 +92,10 @@ impl Graph {
             // top or bottom neighbour
             // assuming an earth radius of 1
             return std::f64::consts::PI / 180.;
-        }
-        else {
+        } else {
             // right or left neighbour
-            let lat = (i % self.raster_colums_count) as f64 / (self.raster_rows_count * 180) as f64 - 90.;
+            let lat =
+                (i % self.raster_colums_count) as f64 / (self.raster_rows_count * 180) as f64 - 90.;
             // TODO this distance depends on the latitude we are currently on and we wan to assume an earth radius of 1
             // TODO maybe use a lookup table for this based on the current row_number which is (i % self.raster_colums_count)
             // TODO maybe (https://en.wikipedia.org/wiki/Haversine_formula)
@@ -109,27 +113,42 @@ fn main() {
         return;
     }
 
+    let html_file = include_str!("index.html");
+    let marker_icon = include_bytes!("marker-icon.png");
+    let marker_icon2 = include_bytes!("marker-icon2.png");
+
     // TODO Load graph and setup routing
 
-    rouille::start_server("127.0.0.1:8000", move |request| match request.method() {
-        "GET" => {
-            // TODO Return html file
-            return Response::text("Some GET response");
-        }
-        "POST" => {
-            let request_body = request.data();
-            let mut content = String::new();
-            if let Some(mut body) = request_body {
-                let result = body.read_to_string(&mut content);
-                if result.is_err() {
-                    println!("Error reading POST body: {}", result.unwrap_err());
+    rouille::start_server("localhost:8000", move |request| {
+        rouille::router!(request,
+            (GET) (/) => {
+                rouille::Response::html(html_file)
+            },
+
+            (POST) (/) => {
+                let request_body = request.data();
+                let mut content = String::new();
+                if let Some(mut body) = request_body {
+                    let result = body.read_to_string(&mut content);
+                    if result.is_err() {
+                        println!("Error reading POST body: {}", result.unwrap_err());
+                    }
                 }
-            }
 
-            // TODO Parse coordinates and return geojson of route
+                // TODO Parse coordinates and return geojson of route
 
-            return Response::text(format!("Some POST response, body was: {}", content));
-        }
-        _ => Response::empty_404(),
+                Response::text(format!("Some POST response, body was: {}", content))
+            },
+
+            (GET) (/marker-icon) => {
+                rouille::Response::from_data("image/png", marker_icon.to_vec())
+            },
+
+            (GET) (/marker-icon2) => {
+                rouille::Response::from_data("image/png", marker_icon2.to_vec())
+            },
+
+            _ => Response::empty_404(),
+        )
     });
 }

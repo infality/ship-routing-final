@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ship Routing</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!--Leaflet -->
+     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin=""/>
+     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>
+
+    <style>
+        html, body {
+            background-color: #444;
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            display: flex;
+            flex-flow: column;
+        }
+
+        #map {
+            flex: 1 1 auto;
+        }
+        .bar {
+            flex: 0 1 auto;
+            padding: 10px;
+        }
+        .title {
+            padding: 0 10px 0 0;
+            font-size: 20px;
+            color: #eee;
+        }
+        .btn {
+            margin: 0 2px;
+            padding: 8px 16px;
+            color: #000;
+            border: 1px solid #000;
+            cursor: pointer;
+        }
+        .myIcon {
+            color: black;
+            width: 10px;
+            height: 100px;
+            background: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <a class="title">Ship Routing</a>
+        <button class="btn" onclick="calculateRoute()" type="button">Calculate route</button>
+        <button class="btn" onclick="clear()" type="button">Clear</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        var myMap = L.map('map').setView([48.775198, 9.191437], 13);
+        var markerLayer = L.geoJSON().addTo(myMap);
+        var routeLayer = L.geoJSON().addTo(myMap);
+
+        L.tileLayer('https://tiles.fmi.uni-stuttgart.de/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+                '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+            tileSize: 512,
+            zoomOffset: -1
+        }).addTo(myMap);
+
+        //add scale to map
+        L.control.scale({
+            position: 'bottomleft',
+            imperial: false,
+            maxWidth: 300
+        }).addTo(myMap);
+
+        var startIcon = L.icon({
+            iconUrl: 'marker-icon',
+            iconSize:    [25, 41],
+            iconAnchor:  [12, 41],
+        });
+
+        var endIcon = L.icon({
+            iconUrl: 'marker-icon2',
+            iconSize:    [25, 41],
+            iconAnchor:  [12, 41],
+        });
+
+        var marker = L.marker();
+        var marker2 = L.marker();
+        marker.setIcon(startIcon);
+        marker2.setIcon(endIcon);
+
+
+        function calculateRoute() {
+            /*$.post("route", 
+            {
+                lat1: marker.getLatLng().lat,
+                lon1: marker.getLatLng().lng,
+                lat2: marker2.getLatLng().lat,
+                lon2: marker2.getLatLng().lng,
+            },
+
+            function(data, status){
+                routeLayer.clearLayers();
+                routeLayer.addData(JSON.parse(data));
+            });*/
+        }
+
+        function clear() {
+            routeLayer.clearLayers();
+            markerLayer.clearLayers();
+            marker.setLatLng(undefined);
+            marker2.setLatLng(undefined);
+        }
+
+        function onMapClick(e) {
+            if (marker.getLatLng() == undefined) {
+                marker
+                    .setIcon(startIcon)
+                    .setLatLng(e.latlng)
+                    .addTo(markerLayer);
+                marker.dragging.enable();
+            } else {
+                if (marker2.getLatLng() == undefined) {
+                    marker2
+                        .setLatLng(e.latlng)
+                        .addTo(markerLayer);
+                    marker2.dragging.enable();
+                    calculateRoute();
+                }
+            }
+        }
+
+        function onMoveEnd(e) {
+            console.log(e);
+            if (marker.getLatLng() != undefined && marker2.getLatLng() != undefined) {
+                calculateRoute();
+            }
+        }
+
+        myMap.on('click', onMapClick);
+        marker.on('moveend', onMoveEnd);
+        marker2.on('moveend', onMoveEnd);
+    </script>
+</body>
+</html>
