@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+route = { path = "../route" }
 osmpbfreader = "0.15.0"
 serde = "1.0.130"
 serde_json = "1.0.68"

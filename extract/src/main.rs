@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use route::graph::Graph;
 use std::{
     collections::HashMap,
     env,
@@ -396,6 +397,34 @@ impl Nodes {
 
         let output_json = serde_json::to_string(&geo_json).unwrap();
         fs::write(&filename, output_json).unwrap();
+    }
+}
+
+trait GraphExt {
+    fn new_from_nodes(&self, nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize);
+}
+
+impl GraphExt for Graph {
+    fn new_from_nodes(
+        &self,
+        nodes: Nodes,
+        raster_colums_count: usize,
+        raster_rows_count: usize,
+    ) -> Graph {
+        let mut nodes_is_water = Vec::new();
+        for node in nodes.nodes.iter() {
+            nodes_is_water.push(node.is_water)
+        }
+
+        // TODO Create offsets and edges
+
+        Graph {
+            nodes_is_water,
+            offsets: Vec::new(),
+            edges: Vec::new(),
+            raster_colums_count,
+            raster_rows_count,
+        }
     }
 }
 

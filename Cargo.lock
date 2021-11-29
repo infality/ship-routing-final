@@ -189,6 +189,7 @@ dependencies = [
  "bincode",
  "osmpbfreader",
  "rayon",
+ "route",
  "serde",
  "serde_json",
 ]
