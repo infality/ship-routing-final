@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use route::graph::Graph;
+use route::Graph;
 use std::{
     collections::HashMap,
     env,
@@ -401,7 +401,12 @@ impl Nodes {
 }
 
 trait GraphExt {
-    fn new_from_nodes(&self, nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize);
+    fn new_from_nodes(
+        &self,
+        nodes: Nodes,
+        raster_colums_count: usize,
+        raster_rows_count: usize,
+    ) -> Graph;
 }
 
 impl GraphExt for Graph {

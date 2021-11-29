@@ -2,8 +2,8 @@ use rouille::Response;
 use std::env;
 use std::io::Read;
 
-mod graph;
-use graph::Graph;
+mod lib;
+use lib::Graph;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
