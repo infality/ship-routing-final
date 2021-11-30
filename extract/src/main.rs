@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use route::Edge;
 use route::Graph;
 use std::{
     collections::HashMap,
@@ -9,6 +10,8 @@ use std::{
     io::Error,
 };
 
+const GRAPH_ROWS_COUNT: usize = 300;
+const GRAPH_COLUMNS_COUNT: usize = 500;
 const FACTOR_INT: i32 = 10_000_000;
 const FACTOR: f64 = 10_000_000.0;
 const WATER: Coordinate = Coordinate {
@@ -355,10 +358,11 @@ impl Nodes {
         println!("Generating not equally distributed nodes");
         let mut nodes = Vec::new();
 
-        for lon in (-180 * FACTOR_INT..180 * FACTOR_INT).step_by((360.0 * FACTOR / 500.0) as usize)
+        for lat in (-85 * FACTOR_INT..85 * FACTOR_INT)
+            .step_by((180.0 * FACTOR / GRAPH_ROWS_COUNT as f64) as usize)
         {
-            for lat in
-                (-90 * FACTOR_INT..90 * FACTOR_INT).step_by((180.0 * FACTOR / 300.0) as usize)
+            for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
+                .step_by((360.0 * FACTOR / GRAPH_COLUMNS_COUNT as f64) as usize)
             {
                 nodes.push(Node {
                     coordinate: Coordinate { lon, lat },
@@ -401,35 +405,38 @@ impl Nodes {
 }
 
 trait GraphExt {
-    fn new_from_nodes(
-        &self,
-        nodes: Nodes,
-        raster_colums_count: usize,
-        raster_rows_count: usize,
-    ) -> Graph;
+    fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph;
 }
 
 impl GraphExt for Graph {
-    fn new_from_nodes(
-        &self,
-        nodes: Nodes,
-        raster_colums_count: usize,
-        raster_rows_count: usize,
-    ) -> Graph {
-        let mut nodes_is_water = Vec::new();
-        for node in nodes.nodes.iter() {
-            nodes_is_water.push(node.is_water)
-        }
-
-        // TODO Create offsets and edges
-
-        Graph {
-            nodes_is_water,
+    fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph {
+        let mut graph = Graph {
+            nodes_is_water: Vec::new(),
             offsets: Vec::new(),
             edges: Vec::new(),
             raster_colums_count,
             raster_rows_count,
+        };
+
+        // Only add right and bottom neighbor
+        for (i, node) in nodes.nodes.iter().enumerate() {
+            graph.nodes_is_water.push(node.is_water);
+            graph.offsets.push(graph.edges.len() as u32);
+
+            let right_index = graph.get_neighbour_right(i);
+            graph.edges.push(Edge {
+                destination: right_index as u32,
+                distance: graph.calculate_distance(i, right_index) as f32,
+            });
+
+            let bottom_index = graph.get_neighbour_bottom(i);
+            graph.edges.push(Edge {
+                destination: bottom_index as u32,
+                distance: graph.calculate_distance(i, bottom_index) as f32,
+            });
         }
+
+        graph
     }
 }
 
@@ -514,6 +521,8 @@ fn main() -> Result<(), Error> {
     });
 
     nodes.write_to_geojson("nodes.json");
+    let graph = Graph::new_from_nodes(nodes, GRAPH_COLUMNS_COUNT, GRAPH_ROWS_COUNT);
+    graph.write_to_binfile("graph.bin");
 
     Ok(())
 }
