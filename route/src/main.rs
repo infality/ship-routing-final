@@ -27,18 +27,22 @@ fn main() {
             },
 
             (POST) (/) => {
-                let request_body = request.data();
-                let mut content = String::new();
-                if let Some(mut body) = request_body {
-                    let result = body.read_to_string(&mut content);
-                    if result.is_err() {
-                        println!("Error reading POST body: {}", result.unwrap_err());
-                    }
-                }
+                let input = rouille::try_or_400!(rouille::post_input!(request, {
+                    lat1: f64,
+                    lon1: f64,
+                    lat2: f64,
+                    lon2: f64,
+                }));
 
-                // TODO Parse coordinates and return geojson of route
+                println!("Marker 1 at: {},{}", input.lon1, input.lat1);
+                println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
-                Response::text(format!("Some POST response, body was: {}", content))
+                let distance = Graph::calculate_distance(input.lon1,input.lat1,input.lon2,input.lat2);
+                println!("Distance: {} km", distance);
+
+                let geojson = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
+
+                Response::text(format!("Some POST response, body was: {}", ""))
             },
 
             (GET) (/marker-icon) => {

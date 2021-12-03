@@ -94,18 +94,21 @@
 
 
         function calculateRoute() {
-            /*$.post("route", 
-            {
-                lat1: marker.getLatLng().lat,
-                lon1: marker.getLatLng().lng,
-                lat2: marker2.getLatLng().lat,
-                lon2: marker2.getLatLng().lng,
-            },
-
-            function(data, status){
+            let params = new FormData();
+            params.append('lat1', marker.getLatLng().lat);
+            params.append('lon1', marker.getLatLng().lng);
+            params.append('lat2', marker2.getLatLng().lat);
+            params.append('lon2', marker2.getLatLng().lng);
+            options = {
+                method: 'POST',
+                body: params
+            };
+            fetch("http://localhost:8000/", options)
+                .then(response => response.json())
+                .then(response => {
                 routeLayer.clearLayers();
-                routeLayer.addData(JSON.parse(data));
-            });*/
+                routeLayer.addData(response);
+            });
         }
 
         function clear() {

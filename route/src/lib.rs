@@ -13,7 +13,6 @@ pub struct Edge {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Graph {
-    pub nodes_is_water: Vec<bool>,
     pub offsets: Vec<u32>,
     pub edges: Vec<Edge>,
     pub raster_colums_count: usize,
@@ -21,6 +20,59 @@ pub struct Graph {
 }
 
 impl Graph {
+    pub fn find_path(&self, lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> String {
+        let nearest_start_node = self.find_nearest_node(lon1, lat1);
+        let nearest_end_node = self.find_nearest_node(lon2, lat2);
+
+        let path = Graph::dijkstra(nearest_start_node, nearest_end_node);
+
+        println!(
+            "Nearest start node: {},{}",
+            self.get_lon(nearest_start_node),
+            self.get_lat(nearest_start_node)
+        );
+        println!(
+            "Nearest end node: {},{}",
+            self.get_lon(nearest_end_node),
+            self.get_lat(nearest_end_node)
+        );
+
+        String::new()
+    }
+
+    pub fn find_nearest_node(&self, lon: f64, lat: f64) -> usize {
+        let mut min_distance = f64::MAX;
+        let mut node = 0;
+
+        for (i, offset) in self.offsets.iter().enumerate() {
+            let next_offset;
+            if i == self.offsets.len() - 1 {
+                next_offset = self.edges.len() as u32;
+            } else {
+                next_offset = self.offsets[i + 1];
+            }
+
+            // Skip if node is not in water
+            if *offset == next_offset {
+                continue;
+            }
+
+            let distance = Self::calculate_distance(lon, lat, self.get_lon(i), self.get_lat(i));
+            if distance < min_distance {
+                min_distance = distance;
+                node = i;
+            }
+        }
+
+        node
+    }
+
+    pub fn dijkstra(start: usize, end: usize) -> Vec<usize> {
+        let nodes = Vec::new();
+
+        nodes
+    }
+
     pub fn new_from_binfile(filename: &str) -> Self {
         println!("Creating Graph from binary file: {}", filename);
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
@@ -35,88 +87,31 @@ impl Graph {
         bincode::serialize_into(&mut buf_writer, &self).unwrap();
     }
 
-    pub fn is_water(&self, i: usize) -> bool {
-        return self.nodes_is_water[i];
-    }
-
-    pub fn get_lon(&self, i: usize) -> i32 {
+    pub fn get_lon(&self, i: usize) -> f64 {
         let step_size = (360_0000000.0 / self.raster_colums_count as f64) as usize;
-        (i * step_size) as i32 - 180_0000000
+        let coordinate = (i % self.raster_colums_count) * step_size;
+        let mut coordinate = coordinate as f64 / FACTOR;
+        if coordinate > 180.0 {
+            coordinate = coordinate - 360.0;
+        }
+        coordinate
     }
 
-    pub fn get_lat(&self, i: usize) -> i32 {
+    pub fn get_lat(&self, i: usize) -> f64 {
         let step_size = (180_0000000.0 / self.raster_rows_count as f64) as usize;
-        (i * step_size) as i32 - 90_0000000
+        let coordinate = (i / self.raster_colums_count) * step_size;
+        let mut coordinate = coordinate as f64 / FACTOR;
+        if coordinate > 90.0 {
+            coordinate = coordinate - 180.0;
+        }
+        coordinate
     }
 
-    pub fn get_neighbour_top(&self, i: usize) -> usize {
-        if i < self.raster_rows_count {
-            return (i + self.raster_rows_count) % self.raster_rows_count;
-        }
-        return i - self.raster_rows_count;
-    }
-    pub fn get_neighbour_bottom(&self, i: usize) -> usize {
-        if i >= self.raster_colums_count * (self.raster_rows_count - 1) {
-            return self.raster_colums_count * (self.raster_rows_count - 1)
-                + ((i + self.raster_rows_count) % self.raster_rows_count);
-        }
-        return i + self.raster_rows_count;
-    }
-    pub fn get_neighbour_right(&self, i: usize) -> usize {
-        let row = i / self.raster_colums_count;
-        return row * self.raster_colums_count + ((i + 1) % self.raster_colums_count);
-    }
-    pub fn get_neighbour_left(&self, i: usize) -> usize {
-        let row = i / self.raster_colums_count;
-        return row * self.raster_colums_count + ((i - 1) % self.raster_colums_count);
-    }
-
-    pub fn get_neighbours_in_water(&self, i: usize) -> Vec<usize> {
-        let mut neighbours = Vec::new();
-        // TODO is there a performance impact if we iterate over a vec of neighbours instead?
-        let top = self.get_neighbour_top(i);
-        let bottom = self.get_neighbour_bottom(i);
-        let right = self.get_neighbour_right(i);
-        let left = self.get_neighbour_left(i);
-        if self.is_water(top) {
-            neighbours.push(top);
-        }
-        if self.is_water(bottom) {
-            neighbours.push(bottom);
-        }
-        if self.is_water(right) {
-            neighbours.push(right);
-        }
-        if self.is_water(left) {
-            neighbours.push(left);
-        }
-        return neighbours;
-    }
-
-    pub fn get_distance(&self, i: usize, j: usize) -> f64 {
-        // this function ONLY works for direct neighbours!
-        // TODO does this substraction crash with usize?
-        if i - j == 1 || j - i == 1 {
-            // top or bottom neighbour
-            // assuming an earth radius of 1
-            return std::f64::consts::PI / 180.;
-        } else {
-            // right or left neighbour
-            let lat =
-                (i % self.raster_colums_count) as f64 / (self.raster_rows_count * 180) as f64 - 90.;
-            // TODO this distance depends on the latitude we are currently on and we wan to assume an earth radius of 1
-            // TODO maybe use a lookup table for this based on the current row_number which is (i % self.raster_colums_count)
-            // TODO maybe (https://en.wikipedia.org/wiki/Haversine_formula)
-            // assuming an earth radius of 1
-            return 1.337;
-        }
-    }
-
-    pub fn calculate_distance(&self, p: usize, q: usize) -> f64 {
-        let plon_rad = (FACTOR * self.get_lon(p) as f64).to_radians();
-        let plat_rad = (FACTOR * self.get_lat(p) as f64).to_radians();
-        let qlon_rad = (FACTOR * self.get_lon(q) as f64).to_radians();
-        let qlat_rad = (FACTOR * self.get_lat(q) as f64).to_radians();
+    pub fn calculate_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> f64 {
+        let plon_rad = (lon1).to_radians();
+        let plat_rad = (lat1).to_radians();
+        let qlon_rad = (lon2).to_radians();
+        let qlat_rad = (lat2).to_radians();
 
         let lat_diff = qlat_rad - plat_rad;
         let lon_diff = qlon_rad - plon_rad;

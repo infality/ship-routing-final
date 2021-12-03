@@ -359,7 +359,7 @@ impl Nodes {
         println!("Generating not equally distributed nodes");
         let mut nodes = Vec::new();
 
-        for lat in (-85 * FACTOR_INT..85 * FACTOR_INT)
+        for lat in (-90 * FACTOR_INT..90 * FACTOR_INT)
             .step_by((180.0 * FACTOR / GRAPH_ROWS_COUNT as f64) as usize)
         {
             for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
@@ -407,34 +407,54 @@ impl Nodes {
 
 trait GraphExt {
     fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph;
+    fn get_neighbors(&self, i: usize) -> Vec<usize>;
 }
 
 impl GraphExt for Graph {
+    fn get_neighbors(&self, i: usize) -> Vec<usize> {
+        let mut neighbors = Vec::new();
+        let row = i / self.raster_colums_count;
+
+        if row > 0 {
+            neighbors.push(i - self.raster_colums_count);
+        }
+        if row < self.raster_rows_count - 1 {
+            neighbors.push(i + self.raster_colums_count);
+        }
+
+        neighbors.push(row * self.raster_colums_count + ((i + 1) % self.raster_colums_count));
+        neighbors.push(row * self.raster_colums_count + ((i - 1) % self.raster_colums_count));
+        neighbors
+    }
+
     fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph {
         let mut graph = Graph {
-            nodes_is_water: Vec::new(),
             offsets: Vec::new(),
             edges: Vec::new(),
             raster_colums_count,
             raster_rows_count,
         };
 
-        // Only add right and bottom neighbor
         for (i, node) in nodes.nodes.iter().enumerate() {
-            graph.nodes_is_water.push(node.is_water);
             graph.offsets.push(graph.edges.len() as u32);
+            if !node.is_water {
+                continue;
+            }
 
-            let right_index = graph.get_neighbour_right(i);
-            graph.edges.push(Edge {
-                destination: right_index as u32,
-                distance: graph.calculate_distance(i, right_index) as f32,
-            });
+            let neighbors = graph.get_neighbors(i);
+            for neighbor in neighbors {
+                let distance = Self::calculate_distance(
+                    graph.get_lon(i),
+                    graph.get_lat(i),
+                    graph.get_lon(neighbor),
+                    graph.get_lat(neighbor),
+                );
 
-            let bottom_index = graph.get_neighbour_bottom(i);
-            graph.edges.push(Edge {
-                destination: bottom_index as u32,
-                distance: graph.calculate_distance(i, bottom_index) as f32,
-            });
+                graph.edges.push(Edge {
+                    destination: neighbor as u32,
+                    distance: distance as f32,
+                });
+            }
         }
 
         graph
@@ -525,7 +545,7 @@ fn main() -> Result<(), Error> {
             println!("Progress: {}", current_count);
         }
 
-        node.set_water_flag(&coasts);
+        //node.set_water_flag(&coasts);
     });
 
     nodes.write_to_geojson("nodes.json");

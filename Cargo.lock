@@ -633,6 +633,7 @@ dependencies = [
  "bincode",
  "rouille",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
