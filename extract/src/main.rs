@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use route::Edge;
 use route::Graph;
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
     env,
@@ -10,8 +11,8 @@ use std::{
     io::Error,
 };
 
-const GRAPH_ROWS_COUNT: usize = 300;
-const GRAPH_COLUMNS_COUNT: usize = 500;
+const GRAPH_ROWS_COUNT: usize = 850;
+const GRAPH_COLUMNS_COUNT: usize = 1250;
 const FACTOR_INT: i32 = 10_000_000;
 const FACTOR: f64 = 10_000_000.0;
 const WATER: Coordinate = Coordinate {
@@ -516,7 +517,14 @@ fn main() -> Result<(), Error> {
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
 
+    println!("Setting water flags for {} nodes", nodes.nodes.len());
+    let counter = AtomicUsize::new(0);
     nodes.nodes.par_iter_mut().for_each(|node| {
+        let current_count = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if current_count % 10000 == 0 {
+            println!("Progress: {}", current_count);
+        }
+
         node.set_water_flag(&coasts);
     });
 
