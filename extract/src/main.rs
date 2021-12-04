@@ -216,6 +216,7 @@ impl Coasts {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Node {
     coordinate: Coordinate,
     is_water: bool,
@@ -295,6 +296,7 @@ impl Node {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Nodes {
     nodes: Vec<Node>,
 }
@@ -349,6 +351,20 @@ impl Nodes {
             }
         }
         Nodes { nodes }
+    }
+
+    fn new_from_binfile(filename: &str) -> Self {
+        println!("Creating Nodes from bin file: {}", filename);
+        let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
+        let nodes: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
+        println!("Created {} Nodes", nodes.nodes.len());
+        return nodes;
+    }
+
+    fn write_to_binfile(&self, filename: &str) {
+        println!("Saving Nodes to binary file: {}", filename);
+        let mut buf_writer = BufWriter::new(File::create(&filename).unwrap());
+        bincode::serialize_into(&mut buf_writer, &self).unwrap();
     }
 
     fn write_to_geojson(&self, filename: &str) {
@@ -415,6 +431,7 @@ impl GraphExt for Graph {
         for (i, node) in nodes.nodes.iter().enumerate() {
             graph.offsets.push(graph.edges.len() as u32);
             if !node.is_water {
+                println!("is water");
                 continue;
             }
 
@@ -526,6 +543,7 @@ fn main() -> Result<(), Error> {
     });
 
     nodes.write_to_geojson("nodes.json");
+    nodes.write_to_binfile("nodes.bin");
     let graph = Graph::new_from_nodes(nodes, GRAPH_COLUMNS_COUNT, GRAPH_ROWS_COUNT);
     graph.write_to_binfile("graph.bin");
 

@@ -63,33 +63,25 @@ impl Graph {
             self.get_lat(nearest_end_node)
         );
 
-        let path = self.dijkstra(nearest_start_node, nearest_end_node);
-
-        let mut geojson = GEOJson {
-            r#type: "FeatureCollection",
-            features: Vec::new(),
-        };
-
         let mut coordinates = Vec::<[f64; 2]>::new();
         coordinates.push([lon2, lat2]);
-        for node in path.iter() {
-            coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
-        }
-        coordinates.push([lon1, lat1]);
-
-        geojson.features.push(GEOJsonFeature {
-            r#type: "Feature",
-            geometry: GEOJsonGeometry {
-                r#type: "LineString",
-                coordinates,
-            },
-            properties: GEOJsonProperty {},
-        });
-
         let mut distance = 0;
-        if path.is_empty() {
+
+        if nearest_start_node == nearest_end_node {
+            println!("start node is equal to end node. skipping dijkstra");
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
-        } else {
+        }
+        else {
+            println!("start node is not equal to end node. executing dijkstra");
+            let path = self.dijkstra(nearest_start_node, nearest_end_node);
+            println!("path len: {}", path.len());
+            if path.len() == 0 {
+                println!("dijkstra did not find a route");
+            }
+            for node in path.iter() {
+                coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+            }
+
             distance +=
                 Self::calculate_distance(lon1, lat1, self.get_lon(path[0]), self.get_lat(path[0]));
             distance += Self::calculate_distance(
@@ -109,7 +101,34 @@ impl Graph {
             }
         }
 
-        (geojson, distance as f64 / FACTOR)
+        coordinates.push([lon1, lat1]);
+
+        let mut geojson = GEOJson {
+            r#type: "FeatureCollection",
+            features: Vec::new(),
+        };
+
+        geojson.features.push(GEOJsonFeature {
+            r#type: "Feature",
+            geometry: GEOJsonGeometry {
+                r#type: "LineString",
+                coordinates: coordinates.clone(),
+            },
+            properties: GEOJsonProperty {},
+        });
+
+        //for coordinate in coordinates {
+        //    geojson.features.push(GEOJsonFeature {
+        //        r#type: "Feature",
+        //        geometry: GEOJsonGeometry {
+        //            r#type: "Point",
+        //            coordinates: coordinate.clone(),
+        //        },
+        //        properties: GEOJsonProperty {},
+        //    });
+        //}
+
+        (geojson, distance as f64)
     }
 
     pub fn find_nearest_node(&self, lon: f64, lat: f64) -> usize {
@@ -134,6 +153,9 @@ impl Graph {
             if distance < min_distance {
                 min_distance = distance;
                 node = i;
+                println!("found better nearest node:");
+                println!("lon: {}, lat: {}", self.get_lon(i), self.get_lat(i));
+                println!("offset: {}, next_offset: {}", offset, next_offset);
             }
         }
 
@@ -237,7 +259,7 @@ impl Graph {
             + plat_rad.cos() * qlat_rad.cos() * (lon_diff / 2.0).sin() * (lon_diff / 2.0).sin();
         let c = 2.0 * f64::atan2(a.sqrt(), (1.0 - a).sqrt());
 
-        (6371.0 * c * FACTOR) as u32
+        (6371.0 * c) as u32
     }
 
     /* fn calculate_distance2(&self, p: usize, q: usize) -> f64 {
