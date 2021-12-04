@@ -38,6 +38,10 @@
             border: 1px solid #000;
             cursor: pointer;
         }
+        #routeInfo {
+            margin-left: 10px;
+            color: #eee;
+        }
         .myIcon {
             color: black;
             width: 10px;
@@ -49,8 +53,8 @@
 <body>
     <div class="bar">
         <a class="title">Ship Routing</a>
-        <button class="btn" onclick="calculateRoute()" type="button">Calculate route</button>
-        <button class="btn" onclick="clear()" type="button">Clear</button>
+        <button class="btn" onclick="clearLayers()">Clear</button>
+        <a id="routeInfo"></a>
     </div>
 
     <div id="map"></div>
@@ -107,15 +111,17 @@
                 .then(response => response.json())
                 .then(response => {
                 routeLayer.clearLayers();
-                routeLayer.addData(response);
+                routeLayer.addData(response.geojson);
+                document.getElementById("routeInfo").innerHTML = "Distance: " + response.distance.toFixed(3) + " km";
             });
         }
 
-        function clear() {
+        function clearLayers() {
             routeLayer.clearLayers();
             markerLayer.clearLayers();
             marker.setLatLng(undefined);
             marker2.setLatLng(undefined);
+            document.getElementById("routeInfo").innerHTML = "";
         }
 
         function onMapClick(e) {

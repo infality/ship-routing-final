@@ -1,6 +1,5 @@
 use rayon::prelude::*;
-use route::Edge;
-use route::Graph;
+use route::{Edge, Graph};
 use std::sync::atomic::AtomicUsize;
 use std::{
     collections::HashMap,
@@ -19,28 +18,6 @@ const WATER: Coordinate = Coordinate {
     lat: 90 * FACTOR_INT,
     lon: 0,
 };
-
-#[derive(serde::Serialize)]
-struct GEOJson<T> {
-    r#type: &'static str,
-    features: Vec<GEOJsonFeature<T>>,
-}
-
-#[derive(serde::Serialize)]
-struct GEOJsonFeature<T> {
-    r#type: &'static str,
-    geometry: GEOJsonGeometry<T>,
-    properties: GEOJsonProperty,
-}
-
-#[derive(serde::Serialize)]
-struct GEOJsonGeometry<T> {
-    r#type: &'static str,
-    coordinates: T,
-}
-
-#[derive(serde::Serialize)]
-struct GEOJsonProperty {}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Coordinate {
@@ -212,7 +189,7 @@ impl Coasts {
 
     fn write_to_geojson(&self, filename: &str) {
         println!("Saving Coasts to geojson file: {}", filename);
-        let mut geo_json = GEOJson {
+        let mut geo_json = route::GEOJson {
             r#type: "FeatureCollection",
             features: Vec::new(),
         };
@@ -224,13 +201,13 @@ impl Coasts {
                 coordinates.push([coordinate.get_lon(), coordinate.get_lat()]);
             }
 
-            geo_json.features.push(GEOJsonFeature {
+            geo_json.features.push(route::GEOJsonFeature {
                 r#type: "Feature",
-                geometry: GEOJsonGeometry {
+                geometry: route::GEOJsonGeometry {
                     r#type: "Polygon",
                     coordinates: [coordinates],
                 },
-                properties: GEOJsonProperty {},
+                properties: route::GEOJsonProperty {},
             });
         }
 
@@ -376,7 +353,7 @@ impl Nodes {
 
     fn write_to_geojson(&self, filename: &str) {
         println!("Saving Nodes to geojson file: {}", filename);
-        let mut geo_json = GEOJson {
+        let mut geo_json = route::GEOJson {
             r#type: "FeatureCollection",
             features: Vec::new(),
         };
@@ -390,13 +367,13 @@ impl Nodes {
                 node.coordinate.lat as f64 / FACTOR,
             ];
 
-            geo_json.features.push(GEOJsonFeature {
+            geo_json.features.push(route::GEOJsonFeature {
                 r#type: "Feature",
-                geometry: GEOJsonGeometry {
+                geometry: route::GEOJsonGeometry {
                     r#type: "Point",
                     coordinates,
                 },
-                properties: GEOJsonProperty {},
+                properties: route::GEOJsonProperty {},
             });
         }
 
@@ -545,7 +522,7 @@ fn main() -> Result<(), Error> {
             println!("Progress: {}", current_count);
         }
 
-        //node.set_water_flag(&coasts);
+        node.set_water_flag(&coasts);
     });
 
     nodes.write_to_geojson("nodes.json");

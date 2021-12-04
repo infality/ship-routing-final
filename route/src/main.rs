@@ -1,9 +1,15 @@
 use rouille::Response;
 use std::env;
-use std::io::Read;
 
 mod lib;
+use lib::GEOJson;
 use lib::Graph;
+
+#[derive(serde::Serialize)]
+struct RouteResponse {
+    geojson: GEOJson<Vec<[f64; 2]>>,
+    distance: f64,
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -17,7 +23,6 @@ fn main() {
     let marker_icon = include_bytes!("marker-icon.png");
     let marker_icon2 = include_bytes!("marker-icon2.png");
 
-    // TODO Load graph and setup routing
     let graph = Graph::new_from_binfile(&args[1]);
 
     rouille::start_server("localhost:8000", move |request| {
@@ -37,12 +42,10 @@ fn main() {
                 println!("Marker 1 at: {},{}", input.lon1, input.lat1);
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
-                let distance = Graph::calculate_distance(input.lon1,input.lat1,input.lon2,input.lat2);
-                println!("Distance: {} km", distance);
+                let (geojson, distance) = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
+                let route_response = RouteResponse {geojson, distance};
 
-                let geojson = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
-
-                Response::text(format!("Some POST response, body was: {}", ""))
+                Response::json(&route_response)
             },
 
             (GET) (/marker-icon) => {

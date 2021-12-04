@@ -20,11 +20,15 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn find_path(&self, lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> String {
+    pub fn find_path(
+        &self,
+        lon1: f64,
+        lat1: f64,
+        lon2: f64,
+        lat2: f64,
+    ) -> (GEOJson<Vec<[f64; 2]>>, f64) {
         let nearest_start_node = self.find_nearest_node(lon1, lat1);
         let nearest_end_node = self.find_nearest_node(lon2, lat2);
-
-        let path = Graph::dijkstra(nearest_start_node, nearest_end_node);
 
         println!(
             "Nearest start node: {},{}",
@@ -37,7 +41,53 @@ impl Graph {
             self.get_lat(nearest_end_node)
         );
 
-        String::new()
+        let path = Graph::dijkstra(nearest_start_node, nearest_end_node);
+
+        let mut geojson = GEOJson {
+            r#type: "FeatureCollection",
+            features: Vec::new(),
+        };
+
+        let mut coordinates = Vec::<[f64; 2]>::new();
+        coordinates.push([lon1, lat1]);
+        for node in path.iter() {
+            coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+        }
+        coordinates.push([lon2, lat2]);
+
+        geojson.features.push(GEOJsonFeature {
+            r#type: "Feature",
+            geometry: GEOJsonGeometry {
+                r#type: "LineString",
+                coordinates,
+            },
+            properties: GEOJsonProperty {},
+        });
+
+        let mut distance = 0.0;
+        if path.is_empty() {
+            distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
+        } else {
+            distance +=
+                Self::calculate_distance(lon1, lat1, self.get_lon(path[0]), self.get_lat(path[0]));
+            distance += Self::calculate_distance(
+                self.get_lon(*path.last().unwrap()),
+                self.get_lat(*path.last().unwrap()),
+                lon2,
+                lat2,
+            );
+
+            for i in 0..(path.len() - 1) {
+                distance += Self::calculate_distance(
+                    self.get_lon(path[i]),
+                    self.get_lat(path[i]),
+                    self.get_lon(path[i + 1]),
+                    self.get_lat(path[i + 1]),
+                );
+            }
+        }
+
+        (geojson, distance)
     }
 
     pub fn find_nearest_node(&self, lon: f64, lat: f64) -> usize {
@@ -153,3 +203,25 @@ impl Graph {
         6371.0 * f64::atan2(cross_length, dot)
     } */
 }
+
+#[derive(serde::Serialize)]
+pub struct GEOJson<T> {
+    pub r#type: &'static str,
+    pub features: Vec<GEOJsonFeature<T>>,
+}
+
+#[derive(serde::Serialize)]
+pub struct GEOJsonFeature<T> {
+    pub r#type: &'static str,
+    pub geometry: GEOJsonGeometry<T>,
+    pub properties: GEOJsonProperty,
+}
+
+#[derive(serde::Serialize)]
+pub struct GEOJsonGeometry<T> {
+    pub r#type: &'static str,
+    pub coordinates: T,
+}
+
+#[derive(serde::Serialize)]
+pub struct GEOJsonProperty {}
