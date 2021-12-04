@@ -429,7 +429,7 @@ impl GraphExt for Graph {
 
                 graph.edges.push(Edge {
                     destination: neighbor as u32,
-                    distance: distance as f32,
+                    distance: distance,
                 });
             }
         }
