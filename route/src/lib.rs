@@ -82,6 +82,7 @@ impl Graph {
                 coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
             }
 
+            //TODO dont calc dist if path.len()=0
             distance +=
                 Self::calculate_distance(lon1, lat1, self.get_lon(path[0]), self.get_lat(path[0]));
             distance += Self::calculate_distance(
@@ -175,6 +176,10 @@ impl Graph {
 
         distances[start] = 0;
         queue.push(HeapNode { id: start as u32, distance: 0 });
+
+        //TODO FIX THIS! node_count != offsets.len()
+        println!("node_count: {}", node_count);
+        println!("offsets.len(): {}", self.offsets.len());
 
         while let Some(node) = queue.pop() {
             if finished[node.id as usize] {
