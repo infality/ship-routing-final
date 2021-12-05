@@ -55,8 +55,8 @@ impl Graph {
         let nearest_start_node_opt = self.find_nearest_node(lon1, lat1);
         let nearest_end_node_opt = self.find_nearest_node(lon2, lat2);
         println!(
-            "Time taken for nearest node search: {}µs",
-            now.elapsed().as_micros()
+            "Time taken for nearest node search: {}ms",
+            now.elapsed().as_micros() as f32 / 1000.
         );
         now = Instant::now();
 
@@ -111,8 +111,8 @@ impl Graph {
                 }
             }
             println!(
-                "Time taken for path search: {}µs",
-                now.elapsed().as_micros()
+                "Time taken for path search: {}ms",
+                now.elapsed().as_micros() as f32 / 1000.
             );
         }
 
