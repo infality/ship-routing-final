@@ -341,7 +341,9 @@ impl Nodes {
         for lat in (-90 * FACTOR_INT..90 * FACTOR_INT)
             .step_by((180.0 * FACTOR / GRAPH_ROWS_COUNT as f64) as usize)
         {
-            for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
+            // dont go till 180, because then we have GRAPH_COLUMNS_COUNT to many nodes (and duplicates at 180/-180)
+            // TODO does not work yet
+            for lon in (-180 * FACTOR_INT..179_9000000)
                 .step_by((360.0 * FACTOR / GRAPH_COLUMNS_COUNT as f64) as usize)
             {
                 nodes.push(Node {
@@ -490,62 +492,62 @@ fn east_or_west(clon: f64, dlon: f64) -> i32 {
 fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
 
-    //let file_name;
-    //let skip_read_pbf;
+    let file_name;
+    let skip_read_pbf;
 
-    //match args.len() {
-    //    l if l < 2 => {
-    //        println!("Please pass a pbf file");
-    //        return Ok(());
-    //    }
-    //    l if l == 2 => {
-    //        file_name = &args[1];
-    //        skip_read_pbf = false;
-    //    }
-    //    l if l == 3 => {
-    //        if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
-    //            skip_read_pbf = true;
-    //            file_name = &args[2];
-    //        } else if &args[2] == "-s" || &args[2] == "--skip-read-pbf" {
-    //            file_name = &args[1];
-    //            skip_read_pbf = true;
-    //        } else {
-    //            println!("Invalid argument");
-    //            return Ok(());
-    //        }
-    //    }
-    //    _ => {
-    //        println!("Too many arguments");
-    //        return Ok(());
-    //    }
-    //}
+    match args.len() {
+        l if l < 2 => {
+            println!("Please pass a pbf file");
+            return Ok(());
+        }
+        l if l == 2 => {
+            file_name = &args[1];
+            skip_read_pbf = false;
+        }
+        l if l == 3 => {
+            if &args[1] == "-s" || &args[1] == "--skip-read-pbf" {
+                skip_read_pbf = true;
+                file_name = &args[2];
+            } else if &args[2] == "-s" || &args[2] == "--skip-read-pbf" {
+                file_name = &args[1];
+                skip_read_pbf = true;
+            } else {
+                println!("Invalid argument");
+                return Ok(());
+            }
+        }
+        _ => {
+            println!("Too many arguments");
+            return Ok(());
+        }
+    }
 
-    //let coasts;
-    //if !skip_read_pbf {
-    //    coasts = Coasts::new_from_pbffile(&file_name);
-    //    coasts.write_to_geojson("coastlines.json");
-    //    coasts.write_to_binfile("coastlines.bin");
-    //} else {
-    //    coasts = Coasts::new_from_binfile(&file_name);
-    //    //coasts.write_to_geojson("coastlines.json");
-    //}
+    let coasts;
+    if !skip_read_pbf {
+        coasts = Coasts::new_from_pbffile(&file_name);
+        coasts.write_to_geojson("coastlines.json");
+        coasts.write_to_binfile("coastlines.bin");
+    } else {
+        coasts = Coasts::new_from_binfile(&file_name);
+        //coasts.write_to_geojson("coastlines.json");
+    }
 
-    //let mut nodes = Nodes::new_generate_not_equally_distributed();
+    let mut nodes = Nodes::new_generate_not_equally_distributed();
 
-    //println!("Setting water flags for {} nodes", nodes.nodes.len());
-    //let counter = AtomicUsize::new(0);
-    //nodes.nodes.par_iter_mut().for_each(|node| {
-    //    let current_count = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    //    if current_count % 10000 == 0 {
-    //        println!("Progress: {}", current_count);
-    //    }
+    println!("Setting water flags for {} nodes", nodes.nodes.len());
+    let counter = AtomicUsize::new(0);
+    nodes.nodes.par_iter_mut().for_each(|node| {
+        let current_count = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if current_count % 10000 == 0 {
+            println!("Progress: {}", current_count);
+        }
 
-    //    node.set_water_flag(&coasts);
-    //});
+        node.set_water_flag(&coasts);
+    });
 
-    //nodes.write_to_geojson("nodes.json");
-    //nodes.write_to_binfile("nodes.bin");
-    let nodes = Nodes::new_from_binfile("nodes.bin");
+    nodes.write_to_geojson("nodes.json");
+    nodes.write_to_binfile("nodes.bin");
+    //let nodes = Nodes::new_from_binfile("nodes.bin");
     let graph = Graph::new_from_nodes(nodes, GRAPH_COLUMNS_COUNT, GRAPH_ROWS_COUNT);
     graph.write_to_binfile("graph.bin");
 

@@ -154,9 +154,9 @@ impl Graph {
             if distance < min_distance {
                 min_distance = distance;
                 node = i;
-                println!("found better nearest node:");
-                println!("lon: {}, lat: {}", self.get_lon(i), self.get_lat(i));
-                println!("offset: {}, next_offset: {}", offset, next_offset);
+                //println!("found better nearest node:");
+                //println!("lon: {}, lat: {}", self.get_lon(i), self.get_lat(i));
+                //println!("offset: {}, next_offset: {}", offset, next_offset);
             }
         }
 
@@ -167,6 +167,7 @@ impl Graph {
         let mut nodes = Vec::new();
 
         let node_count = self.raster_colums_count * self.raster_rows_count;
+        //let node_count = self.offsets.len();
 
         let mut distances: Vec<u32> = vec![std::u32::MAX; node_count];
         let mut parent_nodes: Vec<u32> = vec![std::u32::MAX; node_count];
