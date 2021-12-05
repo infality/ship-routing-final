@@ -449,10 +449,12 @@ impl GraphExt for Graph {
 
                 graph.edges.push(Edge {
                     destination: neighbor as u32,
-                    distance: distance,
+                    distance,
                 });
             }
         }
+        // Add another offset to the end to avoid checks on last edge iteration
+        graph.offsets.push(graph.edges.len() as u32);
 
         graph
     }

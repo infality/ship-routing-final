@@ -1,6 +1,7 @@
+use std::time::Instant;
 use std::{
-    cmp::Ordering,
     cmp::min,
+    cmp::Ordering,
     collections::BinaryHeap,
     fs::File,
     io::{BufReader, BufWriter},
@@ -22,7 +23,9 @@ pub struct HeapNode {
 
 impl Ord for HeapNode {
     fn cmp(&self, other: &HeapNode) -> Ordering {
-        other.distance.cmp(&self.distance)
+        other
+            .distance
+            .cmp(&self.distance)
             .then_with(|| self.id.cmp(&other.id))
     }
 }
@@ -49,8 +52,14 @@ impl Graph {
         lon2: f64,
         lat2: f64,
     ) -> (GEOJson<Vec<[f64; 2]>>, f64) {
+        let mut now = Instant::now();
         let nearest_start_node = self.find_nearest_node(lon1, lat1);
         let nearest_end_node = self.find_nearest_node(lon2, lat2);
+        println!(
+            "Time taken for nearest node search: {}µs",
+            now.elapsed().as_micros()
+        );
+        now = Instant::now();
 
         println!(
             "Nearest start node: {},{}",
@@ -70,37 +79,38 @@ impl Graph {
         if nearest_start_node == nearest_end_node {
             println!("start node is equal to end node. skipping dijkstra");
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
-        }
-        else {
+        } else {
             println!("start node is not equal to end node. executing dijkstra");
-            let path = self.dijkstra(nearest_start_node, nearest_end_node);
-            println!("path len: {}", path.len());
-            if path.len() == 0 {
+            let result = self.dijkstra(nearest_start_node, nearest_end_node);
+            if result.is_none() {
                 println!("dijkstra did not find a route");
-            }
-            for node in path.iter() {
-                coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
-            }
+                distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
+            } else {
+                let (path, d) = result.unwrap();
+                distance += d;
+                println!("Path length: {}", path.len());
+                for node in path.iter() {
+                    coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+                }
 
-            //TODO dont calc dist if path.len()=0
-            distance +=
-                Self::calculate_distance(lon1, lat1, self.get_lon(path[0]), self.get_lat(path[0]));
-            distance += Self::calculate_distance(
-                self.get_lon(*path.last().unwrap()),
-                self.get_lat(*path.last().unwrap()),
-                lon2,
-                lat2,
-            );
-
-            for i in 0..(path.len() - 1) {
                 distance += Self::calculate_distance(
-                    self.get_lon(path[i]),
-                    self.get_lat(path[i]),
-                    self.get_lon(path[i + 1]),
-                    self.get_lat(path[i + 1]),
+                    lon1,
+                    lat1,
+                    self.get_lon(path[0]),
+                    self.get_lat(path[0]),
+                );
+                distance += Self::calculate_distance(
+                    self.get_lon(*path.last().unwrap()),
+                    self.get_lat(*path.last().unwrap()),
+                    lon2,
+                    lat2,
                 );
             }
         }
+        println!(
+            "Time taken for path search: {}µs",
+            now.elapsed().as_micros()
+        );
 
         coordinates.push([lon1, lat1]);
 
@@ -136,17 +146,12 @@ impl Graph {
         let mut min_distance = u32::MAX;
         let mut node = 0;
 
-        for (i, offset) in self.offsets.iter().enumerate() {
-            let next_offset;
-            if i == self.offsets.len() - 1 {
-                // TODO is the -1 on edges.len needed here?
-                next_offset = self.edges.len() as u32 - 1;
-            } else {
-                next_offset = self.offsets[i + 1];
-            }
+        for i in 0..self.raster_rows_count * self.raster_colums_count {
+            let offset = self.offsets[i];
+            let next_offset = self.offsets[i + 1];
 
             // Skip if node is not in water
-            if *offset == next_offset {
+            if offset == next_offset {
                 continue;
             }
 
@@ -154,20 +159,16 @@ impl Graph {
             if distance < min_distance {
                 min_distance = distance;
                 node = i;
-                //println!("found better nearest node:");
-                //println!("lon: {}, lat: {}", self.get_lon(i), self.get_lat(i));
-                //println!("offset: {}, next_offset: {}", offset, next_offset);
             }
         }
 
         node
     }
 
-    pub fn dijkstra(&self, start: usize, end: usize) -> Vec<usize> {
+    pub fn dijkstra(&self, start: usize, end: usize) -> Option<(Vec<usize>, u32)> {
         let mut nodes = Vec::new();
 
         let node_count = self.raster_colums_count * self.raster_rows_count;
-        //let node_count = self.offsets.len();
 
         let mut distances: Vec<u32> = vec![std::u32::MAX; node_count];
         let mut parent_nodes: Vec<u32> = vec![std::u32::MAX; node_count];
@@ -176,11 +177,10 @@ impl Graph {
         let mut queue = BinaryHeap::with_capacity(node_count);
 
         distances[start] = 0;
-        queue.push(HeapNode { id: start as u32, distance: 0 });
-
-        //TODO FIX THIS! node_count != offsets.len()
-        println!("node_count: {}", node_count);
-        println!("offsets.len(): {}", self.offsets.len());
+        queue.push(HeapNode {
+            id: start as u32,
+            distance: 0,
+        });
 
         while let Some(node) = queue.pop() {
             if finished[node.id as usize] {
@@ -188,18 +188,23 @@ impl Graph {
             }
             finished[node.id as usize] = true;
 
-            for i in self.offsets[node.id as usize] as usize..min(self.edges.len() as u32 -1, self.offsets[node.id as usize + 1]) as usize {
-                let dest = self.edges[i].destination; 
-                let dist = self.edges[i].distance; 
+            for i in
+                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            {
+                let dest = self.edges[i].destination;
+                let dist = self.edges[i].distance;
 
-                if !finished[dest as usize]{
+                if !finished[dest as usize] {
                     let new_distance = distances[node.id as usize] + dist;
-                    if new_distance < distances[dest as usize]{
-                        queue.push(HeapNode { id: dest, distance: new_distance });
+                    if new_distance < distances[dest as usize] {
+                        queue.push(HeapNode {
+                            id: dest,
+                            distance: new_distance,
+                        });
                         distances[dest as usize] = new_distance;
                         parent_nodes[dest as usize] = node.id;
                         if dest as usize == end {
-                            // return if a path to the stop_node is found
+                            // return if a path to the end is found
                             let mut node = end;
                             while node != start {
                                 nodes.push(node);
@@ -207,15 +212,15 @@ impl Graph {
                             }
                             nodes.push(start);
                             eprintln!("Calculated one-to-one-dijkstra");
-                            return nodes;
+                            return Some((nodes, distances[end]));
                         }
                     }
-                
                 }
             }
         }
 
-        nodes
+        // No path found
+        None
     }
 
     pub fn new_from_binfile(filename: &str) -> Self {
@@ -235,21 +240,15 @@ impl Graph {
     pub fn get_lon(&self, i: usize) -> f64 {
         let step_size = (360_0000000.0 / self.raster_colums_count as f64) as usize;
         let coordinate = (i % self.raster_colums_count) * step_size;
-        let mut coordinate = coordinate as f64 / FACTOR;
-        if coordinate > 180.0 {
-            coordinate = coordinate - 360.0;
-        }
-        coordinate
+        let coordinate = coordinate as f64 / FACTOR;
+        coordinate - 180.0
     }
 
     pub fn get_lat(&self, i: usize) -> f64 {
         let step_size = (180_0000000.0 / self.raster_rows_count as f64) as usize;
         let coordinate = (i / self.raster_colums_count) * step_size;
-        let mut coordinate = coordinate as f64 / FACTOR;
-        if coordinate > 90.0 {
-            coordinate = coordinate - 180.0;
-        }
-        coordinate
+        let coordinate = coordinate as f64 / FACTOR;
+        coordinate - 90.0
     }
 
     pub fn calculate_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> u32 {
