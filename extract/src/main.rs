@@ -10,7 +10,7 @@ use std::{
     io::Error,
 };
 
-const GRAPH_ROWS_COUNT: usize = 850;
+const GRAPH_ROWS_COUNT: usize = 800;
 const GRAPH_COLUMNS_COUNT: usize = 1250;
 const FACTOR_INT: i32 = 10_000_000;
 const FACTOR: f64 = 10_000_000.0;
@@ -343,7 +343,7 @@ impl Nodes {
         {
             // dont go till 180, because then we have GRAPH_COLUMNS_COUNT to many nodes (and duplicates at 180/-180)
             // TODO does not work yet
-            for lon in (-180 * FACTOR_INT..179_9000000)
+            for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
                 .step_by((360.0 * FACTOR / GRAPH_COLUMNS_COUNT as f64) as usize)
             {
                 nodes.push(Node {
