@@ -341,8 +341,6 @@ impl Nodes {
         for lat in (-90 * FACTOR_INT..90 * FACTOR_INT)
             .step_by((180.0 * FACTOR / GRAPH_ROWS_COUNT as f64) as usize)
         {
-            // dont go till 180, because then we have GRAPH_COLUMNS_COUNT to many nodes (and duplicates at 180/-180)
-            // TODO does not work yet
             for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
                 .step_by((360.0 * FACTOR / GRAPH_COLUMNS_COUNT as f64) as usize)
             {

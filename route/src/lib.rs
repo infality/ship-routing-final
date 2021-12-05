@@ -1,6 +1,5 @@
 use std::time::Instant;
 use std::{
-    cmp::min,
     cmp::Ordering,
     collections::BinaryHeap,
     fs::File,
@@ -53,64 +52,69 @@ impl Graph {
         lat2: f64,
     ) -> (GEOJson<Vec<[f64; 2]>>, f64) {
         let mut now = Instant::now();
-        let nearest_start_node = self.find_nearest_node(lon1, lat1);
-        let nearest_end_node = self.find_nearest_node(lon2, lat2);
+        let nearest_start_node_opt = self.find_nearest_node(lon1, lat1);
+        let nearest_end_node_opt = self.find_nearest_node(lon2, lat2);
         println!(
             "Time taken for nearest node search: {}µs",
             now.elapsed().as_micros()
         );
         now = Instant::now();
 
-        println!(
-            "Nearest start node: {},{}",
-            self.get_lon(nearest_start_node),
-            self.get_lat(nearest_start_node)
-        );
-        println!(
-            "Nearest end node: {},{}",
-            self.get_lon(nearest_end_node),
-            self.get_lat(nearest_end_node)
-        );
-
         let mut coordinates = Vec::<[f64; 2]>::new();
         coordinates.push([lon2, lat2]);
         let mut distance = 0;
 
-        if nearest_start_node == nearest_end_node {
-            println!("start node is equal to end node. skipping dijkstra");
-            distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
-        } else {
-            println!("start node is not equal to end node. executing dijkstra");
-            let result = self.dijkstra(nearest_start_node, nearest_end_node);
-            if result.is_none() {
-                println!("dijkstra did not find a route");
+        if nearest_start_node_opt != None && nearest_end_node_opt != None {
+            let nearest_start_node = nearest_start_node_opt.unwrap();
+            let nearest_end_node = nearest_end_node_opt.unwrap();
+                
+            println!(
+                "Nearest start node: {},{}",
+                self.get_lon(nearest_start_node),
+                self.get_lat(nearest_start_node)
+            );
+            println!(
+                "Nearest end node: {},{}",
+                self.get_lon(nearest_end_node),
+                self.get_lat(nearest_end_node)
+            );
+
+            if nearest_start_node == nearest_end_node {
+                println!("start node is equal to end node. skipping dijkstra");
                 distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
             } else {
-                let (path, d) = result.unwrap();
-                distance += d;
-                println!("Path length: {}", path.len());
-                for node in path.iter() {
-                    coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
-                }
+                println!("start node is not equal to end node. executing dijkstra");
+                let result = self.dijkstra(nearest_start_node, nearest_end_node);
+                if result.is_none() {
+                    println!("dijkstra did not find a route");
+                    distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
+                } else {
+                    let (path, d) = result.unwrap();
+                    distance += d;
+                    println!("Path length: {}", path.len());
+                    for node in path.iter() {
+                        coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+                    }
 
-                distance += Self::calculate_distance(
-                    lon1,
-                    lat1,
-                    self.get_lon(path[0]),
-                    self.get_lat(path[0]),
-                );
-                distance += Self::calculate_distance(
-                    self.get_lon(*path.last().unwrap()),
-                    self.get_lat(*path.last().unwrap()),
-                    lon2,
-                    lat2,
-                );
+                    distance += Self::calculate_distance(
+                        lon1,
+                        lat1,
+                        self.get_lon(path[0]),
+                        self.get_lat(path[0]),
+                    );
+                    distance += Self::calculate_distance(
+                        self.get_lon(*path.last().unwrap()),
+                        self.get_lat(*path.last().unwrap()),
+                        lon2,
+                        lat2,
+                    );
+                }
             }
+            println!(
+                "Time taken for path search: {}µs",
+                now.elapsed().as_micros()
+            );
         }
-        println!(
-            "Time taken for path search: {}µs",
-            now.elapsed().as_micros()
-        );
 
         coordinates.push([lon1, lat1]);
 
@@ -142,27 +146,54 @@ impl Graph {
         (geojson, distance as f64)
     }
 
-    pub fn find_nearest_node(&self, lon: f64, lat: f64) -> usize {
+    pub fn find_nearest_node(&self, lon: f64, lat: f64) -> Option<usize> {
+        //let mut min_distance = u32::MAX;
+        //let mut node = 0;
+
+        //for i in 0..self.raster_rows_count * self.raster_colums_count {
+        //    let offset = self.offsets[i];
+        //    let next_offset = self.offsets[i + 1];
+
+        //    // Skip if node is not in water
+        //    if offset == next_offset {
+        //        continue;
+        //    }
+
+        //    let distance = Self::calculate_distance(lon, lat, self.get_lon(i), self.get_lat(i));
+        //    if distance < min_distance {
+        //        min_distance = distance;
+        //        node = i;
+        //    }
+        //}
+        let step_size_lon = (360_0000000.0 / self.raster_colums_count as f64) as usize;
+        let lon_index_left = ((lon + 180.) * FACTOR) as usize / step_size_lon;
+        let lon_index_right = (lon_index_left + 1) % self.raster_rows_count;
+
+        let step_size_lat = (180_0000000.0 / self.raster_rows_count as f64) as usize;
+        let lat_index_top = ((lat + 90.) * FACTOR) as usize / step_size_lat;
+        let lat_index_bottom = (lat_index_top + 1) % self.raster_colums_count;
+
+        let mut neighbor_ids = vec![];
+        neighbor_ids.push((lat_index_top * self.raster_colums_count) + lon_index_left);
+        neighbor_ids.push((lat_index_top * self.raster_colums_count) + lon_index_right);
+        neighbor_ids.push((lat_index_bottom * self.raster_colums_count) + lon_index_left);
+        neighbor_ids.push((lat_index_bottom * self.raster_colums_count) + lon_index_right);
+
+        let mut best_neighbor = neighbor_ids[0];
         let mut min_distance = u32::MAX;
-        let mut node = 0;
-
-        for i in 0..self.raster_rows_count * self.raster_colums_count {
-            let offset = self.offsets[i];
-            let next_offset = self.offsets[i + 1];
-
-            // Skip if node is not in water
-            if offset == next_offset {
-                continue;
-            }
-
-            let distance = Self::calculate_distance(lon, lat, self.get_lon(i), self.get_lat(i));
+        for neighbor in neighbor_ids {
+            let distance = Self::calculate_distance(lon, lat, self.get_lon(neighbor), self.get_lat(neighbor));
             if distance < min_distance {
+                // TODO check if neighbor is in water
+                best_neighbor = neighbor;
                 min_distance = distance;
-                node = i;
             }
         }
 
-        node
+        if min_distance == u32::MAX {
+            return None;
+        }
+        Some(best_neighbor)
     }
 
     pub fn dijkstra(&self, start: usize, end: usize) -> Option<(Vec<usize>, u32)> {
