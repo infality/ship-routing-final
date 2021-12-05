@@ -67,7 +67,7 @@ impl Graph {
         if nearest_start_node_opt != None && nearest_end_node_opt != None {
             let nearest_start_node = nearest_start_node_opt.unwrap();
             let nearest_end_node = nearest_end_node_opt.unwrap();
-                
+
             println!(
                 "Nearest start node: {},{}",
                 self.get_lon(nearest_start_node),
@@ -167,11 +167,11 @@ impl Graph {
         //}
         let step_size_lon = (360_0000000.0 / self.raster_colums_count as f64) as usize;
         let lon_index_left = ((lon + 180.) * FACTOR) as usize / step_size_lon;
-        let lon_index_right = (lon_index_left + 1) % self.raster_rows_count;
+        let lon_index_right = (lon_index_left + 1) % self.raster_colums_count;
 
         let step_size_lat = (180_0000000.0 / self.raster_rows_count as f64) as usize;
         let lat_index_top = ((lat + 90.) * FACTOR) as usize / step_size_lat;
-        let lat_index_bottom = (lat_index_top + 1) % self.raster_colums_count;
+        let lat_index_bottom = (lat_index_top + 1) % self.raster_rows_count;
 
         let mut neighbor_ids = vec![];
         neighbor_ids.push((lat_index_top * self.raster_colums_count) + lon_index_left);
@@ -182,9 +182,12 @@ impl Graph {
         let mut best_neighbor = neighbor_ids[0];
         let mut min_distance = u32::MAX;
         for neighbor in neighbor_ids {
-            let distance = Self::calculate_distance(lon, lat, self.get_lon(neighbor), self.get_lat(neighbor));
-            if distance < min_distance {
-                // TODO check if neighbor is in water
+            let distance =
+                Self::calculate_distance(lon, lat, self.get_lon(neighbor), self.get_lat(neighbor));
+
+            let is_neigbor_water = self.offsets[neighbor] != self.offsets[neighbor + 1];
+
+            if is_neigbor_water && distance < min_distance {
                 best_neighbor = neighbor;
                 min_distance = distance;
             }
