@@ -6,6 +6,8 @@ use std::{
     io::{BufReader, BufWriter},
 };
 
+use rand::Rng;
+
 const FACTOR: f64 = 10_000_000.0;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -50,10 +52,10 @@ impl Graph {
         lat1: f64,
         lon2: f64,
         lat2: f64,
-    ) -> (GEOJson<Vec<[f64; 2]>>, f64) {
+    ) -> Option<(GEOJson<Vec<[f64; 2]>>, f64)> {
         let mut now = Instant::now();
-        let nearest_start_node_opt = self.find_nearest_node(lon1, lat1);
-        let nearest_end_node_opt = self.find_nearest_node(lon2, lat2);
+        let nearest_start_node = self.find_nearest_node(lon1, lat1);
+        let nearest_end_node = self.find_nearest_node(lon2, lat2);
         println!(
             "Time taken for nearest node search: {}ms",
             now.elapsed().as_micros() as f32 / 1000.
@@ -64,57 +66,60 @@ impl Graph {
         coordinates.push([lon2, lat2]);
         let mut distance = 0;
 
-        if nearest_start_node_opt != None && nearest_end_node_opt != None {
-            let nearest_start_node = nearest_start_node_opt.unwrap();
-            let nearest_end_node = nearest_end_node_opt.unwrap();
-
-            println!(
-                "Nearest start node: {},{}",
-                self.get_lon(nearest_start_node),
-                self.get_lat(nearest_start_node)
-            );
-            println!(
-                "Nearest end node: {},{}",
-                self.get_lon(nearest_end_node),
-                self.get_lat(nearest_end_node)
-            );
-
-            if nearest_start_node == nearest_end_node {
-                println!("start node is equal to end node. skipping dijkstra");
-                distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
-            } else {
-                println!("start node is not equal to end node. executing dijkstra");
-                let result = self.dijkstra(nearest_start_node, nearest_end_node);
-                if result.is_none() {
-                    println!("dijkstra did not find a route");
-                    distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
-                } else {
-                    let (path, d) = result.unwrap();
-                    distance += d;
-                    println!("Path length: {}", path.len());
-                    for node in path.iter() {
-                        coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
-                    }
-
-                    distance += Self::calculate_distance(
-                        lon1,
-                        lat1,
-                        self.get_lon(path[0]),
-                        self.get_lat(path[0]),
-                    );
-                    distance += Self::calculate_distance(
-                        self.get_lon(*path.last().unwrap()),
-                        self.get_lat(*path.last().unwrap()),
-                        lon2,
-                        lat2,
-                    );
-                }
-            }
-            println!(
-                "Time taken for path search: {}ms",
-                now.elapsed().as_micros() as f32 / 1000.
-            );
+        if nearest_start_node.is_none() || nearest_end_node.is_none() {
+            println!("No nearest start or end node found");
+            return None;
         }
+
+        let nearest_start_node = nearest_start_node.unwrap();
+        let nearest_end_node = nearest_end_node.unwrap();
+
+        println!(
+            "Nearest start node: {},{}",
+            self.get_lon(nearest_start_node),
+            self.get_lat(nearest_start_node)
+        );
+        println!(
+            "Nearest end node: {},{}",
+            self.get_lon(nearest_end_node),
+            self.get_lat(nearest_end_node)
+        );
+
+        if nearest_start_node == nearest_end_node {
+            println!("start node is equal to end node. skipping dijkstra");
+            distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
+        } else {
+            println!("start node is not equal to end node. executing dijkstra");
+            let result = self.dijkstra(nearest_start_node, nearest_end_node);
+            if result.is_none() {
+                println!("dijkstra did not find a route");
+                return None;
+            } else {
+                let (path, d) = result.unwrap();
+                distance += d;
+                println!("Path length: {}", path.len());
+                for node in path.iter() {
+                    coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+                }
+
+                distance += Self::calculate_distance(
+                    lon1,
+                    lat1,
+                    self.get_lon(path[0]),
+                    self.get_lat(path[0]),
+                );
+                distance += Self::calculate_distance(
+                    self.get_lon(*path.last().unwrap()),
+                    self.get_lat(*path.last().unwrap()),
+                    lon2,
+                    lat2,
+                );
+            }
+        }
+        println!(
+            "Time taken for path search: {}ms",
+            now.elapsed().as_micros() as f32 / 1000.
+        );
 
         coordinates.push([lon1, lat1]);
 
@@ -123,48 +128,57 @@ impl Graph {
             features: Vec::new(),
         };
 
+        // Split up lines crossing the antimeridan
+        let mut line_start = 0;
+        let mut lon_start = 0.0;
+        for i in 1..coordinates.len() {
+            if (coordinates[i - 1][0] - coordinates[i][0]).abs() > 180.0 {
+                let lon_end = if coordinates[i - 1][0] < 0.0 {
+                    -180.0
+                } else {
+                    180.0
+                };
+
+                let mut line_coordinates = Vec::new();
+                if line_start > 0 {
+                    line_coordinates.push([lon_start, coordinates[line_start][1]]);
+                }
+                line_coordinates.extend_from_slice(&coordinates[line_start..i - 1]);
+                line_coordinates.push([lon_end, coordinates[i - 1][1]]);
+
+                geojson.features.push(GEOJsonFeature {
+                    r#type: "Feature",
+                    geometry: GEOJsonGeometry {
+                        r#type: "LineString",
+                        coordinates: line_coordinates,
+                    },
+                    properties: GEOJsonProperty {},
+                });
+
+                line_start = i;
+                lon_start = -lon_end;
+            }
+        }
+
+        let mut line_coordinates = Vec::new();
+        if line_start > 0 {
+            line_coordinates.push([lon_start, coordinates[line_start][1]]);
+        }
+        line_coordinates.extend_from_slice(&coordinates[line_start..]);
+
         geojson.features.push(GEOJsonFeature {
             r#type: "Feature",
             geometry: GEOJsonGeometry {
                 r#type: "LineString",
-                coordinates: coordinates.clone(),
+                coordinates: line_coordinates,
             },
             properties: GEOJsonProperty {},
         });
 
-        //for coordinate in coordinates {
-        //    geojson.features.push(GEOJsonFeature {
-        //        r#type: "Feature",
-        //        geometry: GEOJsonGeometry {
-        //            r#type: "Point",
-        //            coordinates: coordinate.clone(),
-        //        },
-        //        properties: GEOJsonProperty {},
-        //    });
-        //}
-
-        (geojson, distance as f64)
+        Some((geojson, distance as f64))
     }
 
     pub fn find_nearest_node(&self, lon: f64, lat: f64) -> Option<usize> {
-        //let mut min_distance = u32::MAX;
-        //let mut node = 0;
-
-        //for i in 0..self.raster_rows_count * self.raster_colums_count {
-        //    let offset = self.offsets[i];
-        //    let next_offset = self.offsets[i + 1];
-
-        //    // Skip if node is not in water
-        //    if offset == next_offset {
-        //        continue;
-        //    }
-
-        //    let distance = Self::calculate_distance(lon, lat, self.get_lon(i), self.get_lat(i));
-        //    if distance < min_distance {
-        //        min_distance = distance;
-        //        node = i;
-        //    }
-        //}
         let step_size_lon = (360_0000000.0 / self.raster_colums_count as f64) as usize;
         let lon_index_left = ((lon + 180.) * FACTOR) as usize / step_size_lon;
         let lon_index_right = (lon_index_left + 1) % self.raster_colums_count;
@@ -301,35 +315,32 @@ impl Graph {
         (6371.0 * c) as u32
     }
 
-    /* fn calculate_distance2(&self, p: usize, q: usize) -> f64 {
-        let plon_rad = p.get_lon().to_radians();
-        let plat_rad = p.get_lat().to_radians();
-        let qlon_rad = q.get_lon().to_radians();
-        let qlat_rad = q.get_lat().to_radians();
+    pub fn test_random_queries(&self, amount: usize) {
+        let mut water_nodes = Vec::new();
+        for i in 0..(self.raster_rows_count * self.raster_colums_count) {
+            if self.offsets[i] != self.offsets[i + 1] {
+                water_nodes.push(i);
+            }
+        }
 
-        let p_vec = [
-            plat_rad.cos() * plon_rad.cos(),
-            plat_rad.cos() * plon_rad.sin(),
-            plat_rad.sin(),
-        ];
+        let mut rng = rand::thread_rng();
 
-        let q_vec = [
-            qlat_rad.cos() * qlon_rad.cos(),
-            qlat_rad.cos() * qlon_rad.sin(),
-            qlat_rad.sin(),
-        ];
+        let start = Instant::now();
+        for _ in 0..amount {
+            let start_node = water_nodes[rng.gen_range(0..water_nodes.len())];
+            let end_node = water_nodes[rng.gen_range(0..water_nodes.len())];
 
-        let cross = [
-            p_vec[1] * q_vec[2] - p_vec[2] * q_vec[1],
-            p_vec[2] * q_vec[0] - p_vec[0] * q_vec[2],
-            p_vec[0] * q_vec[1] - p_vec[1] * q_vec[0],
-        ];
-        let cross_length =
-            f64::sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]);
-        let dot = p_vec[0] * q_vec[0] + p_vec[1] * q_vec[1] + p_vec[2] * q_vec[2];
-
-        6371.0 * f64::atan2(cross_length, dot)
-    } */
+            self.dijkstra(start_node, end_node);
+        }
+        let end = Instant::now();
+        let diff = end - start;
+        println!("Statistics for {} random queries:", amount);
+        println!("Total:   {}ms", diff.as_micros() as f32 / 1000.);
+        println!(
+            "Average: {}ms",
+            (diff.as_micros() / amount as u128) as f32 / 1000.
+        );
+    }
 }
 
 #[derive(serde::Serialize)]

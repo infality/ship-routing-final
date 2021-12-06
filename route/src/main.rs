@@ -42,10 +42,12 @@ fn main() {
                 println!("Marker 1 at: {},{}", input.lon1, input.lat1);
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
-                let (geojson, distance) = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
-                let route_response = RouteResponse {geojson, distance};
-
-                Response::json(&route_response)
+                let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
+                if let Some((geojson, distance)) = result {
+                    let route_response = RouteResponse {geojson, distance};
+                    return Response::json(&route_response);
+                }
+                Response::text("{}")
             },
 
             (GET) (/marker-icon) => {

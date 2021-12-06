@@ -111,6 +111,11 @@
             fetch("http://localhost:8000/", options)
                 .then(response => response.json())
                 .then(response => {
+                if(!Object.keys(response).length){
+                    alert("No path could be found.");
+                    return;
+                }
+
                 routeLayer.clearLayers();
                 routeLayer.addData(response.geojson);
                 document.getElementById("routeInfo").innerHTML = "Distance: " + response.distance.toFixed(3) + " km";
