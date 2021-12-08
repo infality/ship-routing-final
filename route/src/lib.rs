@@ -86,15 +86,22 @@ impl Graph {
         );
 
         if nearest_start_node == nearest_end_node {
-            println!("start node is equal to end node. skipping dijkstra");
+            println!("Start node is equal to end node. Skipping dijkstra");
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
-            println!("start node is not equal to end node. executing dijkstra");
+            println!("Start node is not equal to end node. Executing dijkstra");
             let result = self.dijkstra(nearest_start_node, nearest_end_node);
             if result.is_none() {
-                println!("dijkstra did not find a route");
+                println!(
+                    "Dijkstra did not find a route and took {}ms", 
+                    now.elapsed().as_micros() as f32 / 1000.
+                );
                 return None;
             } else {
+                println!(
+                    "Dijkstra found a route and took {}ms",
+                    now.elapsed().as_micros() as f32 / 1000.
+                );
                 let (path, d) = result.unwrap();
                 distance += d;
                 println!("Path length: {}", path.len());
@@ -116,10 +123,6 @@ impl Graph {
                 );
             }
         }
-        println!(
-            "Time taken for path search: {}ms",
-            now.elapsed().as_micros() as f32 / 1000.
-        );
 
         coordinates.push([lon1, lat1]);
 
@@ -259,7 +262,6 @@ impl Graph {
                                 node = parent_nodes[node] as usize;
                             }
                             nodes.push(start);
-                            eprintln!("Calculated one-to-one-dijkstra");
                             return Some((nodes, distances[end]));
                         }
                     }
