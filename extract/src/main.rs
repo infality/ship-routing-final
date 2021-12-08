@@ -62,7 +62,7 @@ struct Coasts {
 
 impl Coasts {
     fn new_from_pbffile(filename: &str) -> Self {
-        println!("Creating Coasts from pbf file: {}", filename);
+        println!("Creating coasts from pbf file: {}", filename);
         let file = File::open(&filename).unwrap();
         let reader = BufReader::new(file);
 
@@ -74,7 +74,7 @@ impl Coasts {
         let mut counter = 0;
         for obj in pbf.iter() {
             if counter % 1000000 == 0 {
-                println!("Searching nodes: {}", counter);
+                println!("Finished {} nodes", counter);
             }
             counter += 1;
 
@@ -115,7 +115,7 @@ impl Coasts {
 
         println!("Found {} nodes", nodes.len());
         println!("Found {} ways", coasts.len());
-        println!("Finished parsing");
+        println!("Finished parsing the pbf file");
 
         let mut actual_coasts = Vec::<Coast>::new();
         let mut current_coast;
@@ -126,6 +126,7 @@ impl Coasts {
         }
 
         counter = 1;
+        println!("Merging coasts");
         loop {
             while !current_coast
                 .get_first()
@@ -135,7 +136,7 @@ impl Coasts {
                 if let Some(coast) = coasts.get_mut(&coordinate) {
                     counter += 1;
                     if counter % 1000 == 0 {
-                        println!("Merged coasts: {}", counter);
+                        println!("Merged {} coasts", counter);
                     }
                     current_coast.coordinates.append(&mut coast.coordinates);
 
@@ -160,35 +161,34 @@ impl Coasts {
             let next_coast = coasts.remove(&next_key).unwrap();
             counter += 1;
             if counter % 1000 == 0 {
-                println!("Merged coasts: {}", counter);
+                println!("Merged {} coasts", counter);
             }
 
             current_coast = next_coast;
         }
 
-        println!("Found {} actual coasts", actual_coasts.len());
-        println!("Finished merging");
+        println!("Created {} actual coasts", actual_coasts.len());
+        println!("Finished merging coasts");
 
-        println!("Created {} Coasts", actual_coasts.len());
         return Coasts { actual_coasts };
     }
 
     fn new_from_binfile(filename: &str) -> Self {
-        println!("Creating Coasts from bin file: {}", filename);
+        println!("Creating coasts from bin file: {}", filename);
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
         let coasts: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
-        println!("Created {} Coasts", coasts.actual_coasts.len());
+        println!("Created {} coasts from bin file", coasts.actual_coasts.len());
         return coasts;
     }
 
     fn write_to_binfile(&self, filename: &str) {
-        println!("Saving Coasts to binary file: {}", filename);
+        println!("Saving coasts to binary file: {}", filename);
         let mut buf_writer = BufWriter::new(File::create(&filename).unwrap());
         bincode::serialize_into(&mut buf_writer, &self.actual_coasts).unwrap();
     }
 
     fn write_to_geojson(&self, filename: &str) {
-        println!("Saving Coasts to geojson file: {}", filename);
+        println!("Saving coasts to geojson file: {}", filename);
         let mut geo_json = route::GEOJson {
             r#type: "FeatureCollection",
             features: Vec::new(),
@@ -302,37 +302,36 @@ struct Nodes {
 }
 
 impl Nodes {
-    fn new_generate_equally_distributed() -> Nodes {
-        println!("Generating equally distributed nodes");
-        let mut nodes = Vec::new();
+    //fn new_generate_equally_distributed() -> Nodes {
+    //    println!("Generating equally distributed nodes");
+    //    let mut nodes = Vec::new();
 
-        let node_count = 1000;
-        let a = 1.0 / node_count as f64;
-        let d = f64::sqrt(a);
-        let m_theta = f64::round(std::f64::consts::PI / d);
-        let d_theta = std::f64::consts::PI / m_theta;
-        let d_phi = a / d_theta;
+    //    let node_count = 1000;
+    //    let a = 1.0 / node_count as f64;
+    //    let d = f64::sqrt(a);
+    //    let m_theta = f64::round(std::f64::consts::PI / d);
+    //    let d_theta = std::f64::consts::PI / m_theta;
+    //    let d_phi = a / d_theta;
 
-        for m in 0..(m_theta as isize) {
-            let theta = std::f64::consts::PI * (m as f64 + 0.5) / m_theta;
-            let m_phi = f64::round(2.0 * std::f64::consts::PI * theta.sin() / d_phi);
-            for n in 0..(m_phi as isize) {
-                let phi = 2.0 * std::f64::consts::PI * n as f64 / m_phi;
+    //    for m in 0..(m_theta as isize) {
+    //        let theta = std::f64::consts::PI * (m as f64 + 0.5) / m_theta;
+    //        let m_phi = f64::round(2.0 * std::f64::consts::PI * theta.sin() / d_phi);
+    //        for n in 0..(m_phi as isize) {
+    //            let phi = 2.0 * std::f64::consts::PI * n as f64 / m_phi;
 
-                let lat = theta.to_degrees() - 90.0;
-                let lon = phi.to_degrees() - 180.0;
-                nodes.push(Node {
-                    coordinate: Coordinate {
-                        lon: (lon * FACTOR) as i32,
-                        lat: (lat * FACTOR) as i32,
-                    },
-                    is_water: true,
-                });
-            }
-        }
-
-        Nodes { nodes }
-    }
+    //            let lat = theta.to_degrees() - 90.0;
+    //            let lon = phi.to_degrees() - 180.0;
+    //            nodes.push(Node {
+    //                coordinate: Coordinate {
+    //                    lon: (lon * FACTOR) as i32,
+    //                    lat: (lat * FACTOR) as i32,
+    //                },
+    //                is_water: true,
+    //            });
+    //        }
+    //    }
+    //    Nodes { nodes }
+    //}
 
     fn new_generate_not_equally_distributed() -> Nodes {
         println!("Generating not equally distributed nodes");
@@ -354,21 +353,21 @@ impl Nodes {
     }
 
     fn new_from_binfile(filename: &str) -> Self {
-        println!("Creating Nodes from bin file: {}", filename);
+        println!("Creating nodes from bin file: {}", filename);
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
         let nodes: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
-        println!("Created {} Nodes", nodes.nodes.len());
+        println!("Created {} nodes", nodes.nodes.len());
         return nodes;
     }
 
     fn write_to_binfile(&self, filename: &str) {
-        println!("Saving Nodes to binary file: {}", filename);
+        println!("Saving nodes to binary file: {}", filename);
         let mut buf_writer = BufWriter::new(File::create(&filename).unwrap());
         bincode::serialize_into(&mut buf_writer, &self).unwrap();
     }
 
     fn write_to_geojson(&self, filename: &str) {
-        println!("Saving Nodes to geojson file: {}", filename);
+        println!("Saving nodes to geojson file: {}", filename);
         let mut geo_json = route::GEOJson {
             r#type: "FeatureCollection",
             features: Vec::new(),
@@ -396,6 +395,19 @@ impl Nodes {
         let output_json = serde_json::to_string(&geo_json).unwrap();
         fs::write(&filename, output_json).unwrap();
     }
+
+    fn set_water_flags(&mut self, coasts: Coasts) {
+        println!("Calculating the water flag for {} nodes:", self.nodes.len());
+        let counter = AtomicUsize::new(0);
+        self.nodes.par_iter_mut().for_each(|node| {
+            let current_count = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if current_count % 10000 == 0 {
+                println!("Finished {} nodes", current_count);
+            }
+
+            node.set_water_flag(&coasts);
+        });
+    }
 }
 
 trait GraphExt {
@@ -421,6 +433,7 @@ impl GraphExt for Graph {
     }
 
     fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph {
+        println!("Generating graph from nodes");
         let mut graph = Graph {
             offsets: Vec::new(),
             edges: Vec::new(),
@@ -431,8 +444,6 @@ impl GraphExt for Graph {
         for (i, node) in nodes.nodes.iter().enumerate() {
             graph.offsets.push(graph.edges.len() as u32);
             if !node.is_water {
-                println!("is not water");
-                println!("edges.len(): {}", graph.edges.len());
                 continue;
             }
 
@@ -525,7 +536,7 @@ fn main() -> Result<(), Error> {
     let coasts;
     if !skip_read_pbf {
         coasts = Coasts::new_from_pbffile(&file_name);
-        coasts.write_to_geojson("coastlines.json");
+        //coasts.write_to_geojson("coastlines.json");
         coasts.write_to_binfile("coastlines.bin");
     } else {
         coasts = Coasts::new_from_binfile(&file_name);
@@ -533,20 +544,10 @@ fn main() -> Result<(), Error> {
     }
 
     let mut nodes = Nodes::new_generate_not_equally_distributed();
+    nodes.set_water_flags(coasts);
 
-    println!("Setting water flags for {} nodes", nodes.nodes.len());
-    let counter = AtomicUsize::new(0);
-    nodes.nodes.par_iter_mut().for_each(|node| {
-        let current_count = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if current_count % 10000 == 0 {
-            println!("Progress: {}", current_count);
-        }
-
-        node.set_water_flag(&coasts);
-    });
-
-    nodes.write_to_geojson("nodes.json");
-    nodes.write_to_binfile("nodes.bin");
+    //nodes.write_to_geojson("nodes.json");
+    //nodes.write_to_binfile("nodes.bin");
     //let nodes = Nodes::new_from_binfile("nodes.bin");
     let graph = Graph::new_from_nodes(nodes, GRAPH_COLUMNS_COUNT, GRAPH_ROWS_COUNT);
     graph.write_to_binfile("graph.bin");
