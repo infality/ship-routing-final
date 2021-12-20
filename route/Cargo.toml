@@ -3,6 +3,13 @@ name = "route"
 version = "0.1.0"
 edition = "2021"
 
+[dev-dependencies]
+criterion = { version = "0.3", features = ["html_reports"] }
+
+[[bench]]
+name = "benchmark"
+harness = false
+
 [dependencies]
 serde = "1.0.130"
 serde_json = "1.0.72"

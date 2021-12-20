@@ -43,6 +43,7 @@ fn main() {
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
                 let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
+                println!("Done!\n");
                 if let Some((geojson, distance)) = result {
                     let route_response = RouteResponse {geojson, distance};
                     return Response::json(&route_response);

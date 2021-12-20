@@ -45,6 +45,12 @@ pub struct Graph {
     pub raster_rows_count: usize,
 }
 
+pub struct DijkstraResult {
+    pub path: Option<Vec<usize>>,
+    pub distance: Option<u32>,
+    pub heap_pops: usize,
+}
+
 impl Graph {
     pub fn find_path(
         &self,
@@ -91,9 +97,9 @@ impl Graph {
         } else {
             println!("Start node is not equal to end node. Executing dijkstra");
             let result = self.dijkstra(nearest_start_node, nearest_end_node);
-            if result.is_none() {
+            if result.path.is_none() || result.distance.is_none() {
                 println!(
-                    "Dijkstra did not find a route and took {}ms", 
+                    "Dijkstra did not find a route and took {}ms",
                     now.elapsed().as_micros() as f32 / 1000.
                 );
                 return None;
@@ -102,8 +108,8 @@ impl Graph {
                     "Dijkstra found a route and took {}ms",
                     now.elapsed().as_micros() as f32 / 1000.
                 );
-                let (path, d) = result.unwrap();
-                distance += d;
+                let path = result.path.unwrap();
+                distance += result.distance.unwrap();
                 println!("Path length: {}", path.len());
                 for node in path.iter() {
                     coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
@@ -216,7 +222,7 @@ impl Graph {
         Some(best_neighbor)
     }
 
-    pub fn dijkstra(&self, start: usize, end: usize) -> Option<(Vec<usize>, u32)> {
+    pub fn dijkstra(&self, start: usize, end: usize) -> DijkstraResult {
         let mut nodes = Vec::new();
 
         let node_count = self.raster_colums_count * self.raster_rows_count;
@@ -233,7 +239,9 @@ impl Graph {
             distance: 0,
         });
 
+        let mut heap_pops: usize = 0;
         while let Some(node) = queue.pop() {
+            heap_pops += 1;
             if finished[node.id as usize] {
                 continue;
             }
@@ -262,7 +270,11 @@ impl Graph {
                                 node = parent_nodes[node] as usize;
                             }
                             nodes.push(start);
-                            return Some((nodes, distances[end]));
+                            return DijkstraResult {
+                                path: Some(nodes),
+                                distance: Some(distances[end]),
+                                heap_pops,
+                            };
                         }
                     }
                 }
@@ -270,7 +282,11 @@ impl Graph {
         }
 
         // No path found
-        None
+        DijkstraResult {
+            path: None,
+            distance: None,
+            heap_pops,
+        }
     }
 
     pub fn new_from_binfile(filename: &str) -> Self {
@@ -317,7 +333,7 @@ impl Graph {
         (6371.0 * c) as u32
     }
 
-    pub fn test_random_queries(&self, amount: usize) {
+    pub fn generate_random_water_nodes(&self, amount: usize) -> Vec<(usize, usize)> {
         let mut water_nodes = Vec::new();
         for i in 0..(self.raster_rows_count * self.raster_colums_count) {
             if self.offsets[i] != self.offsets[i + 1] {
@@ -327,21 +343,14 @@ impl Graph {
 
         let mut rng = rand::thread_rng();
 
-        let start = Instant::now();
+        let mut chosen_nodes = Vec::new();
         for _ in 0..amount {
-            let start_node = water_nodes[rng.gen_range(0..water_nodes.len())];
-            let end_node = water_nodes[rng.gen_range(0..water_nodes.len())];
-
-            self.dijkstra(start_node, end_node);
+            chosen_nodes.push((
+                water_nodes[rng.gen_range(0..water_nodes.len())],
+                water_nodes[rng.gen_range(0..water_nodes.len())],
+            ));
         }
-        let end = Instant::now();
-        let diff = end - start;
-        println!("Statistics for {} random queries:", amount);
-        println!("Total:   {}ms", diff.as_micros() as f32 / 1000.);
-        println!(
-            "Average: {}ms",
-            (diff.as_micros() / amount as u128) as f32 / 1000.
-        );
+        chosen_nodes
     }
 }
 
