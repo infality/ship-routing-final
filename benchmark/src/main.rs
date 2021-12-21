@@ -1,5 +1,7 @@
 use std::{
     env,
+    fs::File,
+    io::Write,
     time::{Duration, Instant},
 };
 
@@ -41,6 +43,18 @@ fn main() {
     println!("Median:   {:>1$.3}ms", median, width);
     println!("Min:      {:>1$.3}ms", min, width);
     println!("Max:      {:>1$.3}ms", max, width);
+
+    let mut file = File::create("benchmark.txt").unwrap();
+    write!(
+        file,
+        "{}",
+        durations
+            .iter()
+            .map(|x| format!("{}", get_milliseconds(x)))
+            .collect::<Vec<String>>()
+            .join("\n")
+    )
+    .unwrap();
 }
 
 fn get_milliseconds(duration: &Duration) -> f64 {
