@@ -3,5 +3,7 @@ set style boxplot outliers pointtype 7
 set style data boxplot
 set boxwidth  0.5
 set pointsize 0.5
+set ylabel "ms per query"
+unset xtics
 FILES = system("ls -1 *.txt")
-plot for [i=1:words(FILES)] word(FILES,i) u (i):($1) title word(FILES,i)
+plot for [i=1:words(FILES)] word(FILES,i) u (i):($1) title substr(word(FILES,i), 0, strstrt(word(FILES,i), ".txt")-1)
