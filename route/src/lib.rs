@@ -45,7 +45,7 @@ pub struct Graph {
     pub raster_rows_count: usize,
 }
 
-pub struct DijkstraResult {
+pub struct PathResult {
     pub path: Option<Vec<usize>>,
     pub distance: Option<u32>,
     pub heap_pops: usize,
@@ -222,14 +222,13 @@ impl Graph {
         Some(best_neighbor)
     }
 
-    pub fn dijkstra(&self, start: usize, end: usize) -> DijkstraResult {
+    pub fn dijkstra(&self, start: usize, end: usize) -> PathResult {
         let mut nodes = Vec::new();
 
         let node_count = self.raster_colums_count * self.raster_rows_count;
 
-        let mut distances: Vec<u32> = vec![std::u32::MAX; node_count];
-        let mut parent_nodes: Vec<u32> = vec![std::u32::MAX; node_count];
-        let mut finished: Vec<bool> = vec![false; node_count];
+        let mut distances = vec![std::u32::MAX; node_count];
+        let mut parent_nodes = vec![std::u32::MAX; node_count];
 
         let mut queue = BinaryHeap::with_capacity(node_count);
 
@@ -242,10 +241,6 @@ impl Graph {
         let mut heap_pops: usize = 0;
         while let Some(node) = queue.pop() {
             heap_pops += 1;
-            if finished[node.id as usize] {
-                continue;
-            }
-            finished[node.id as usize] = true;
 
             for i in
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
@@ -253,7 +248,7 @@ impl Graph {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
 
-                if !finished[dest as usize] {
+                if distances[dest as usize] == std::u32::MAX {
                     let new_distance = distances[node.id as usize] + dist;
                     if new_distance < distances[dest as usize] {
                         queue.push(HeapNode {
@@ -270,7 +265,7 @@ impl Graph {
                                 node = parent_nodes[node] as usize;
                             }
                             nodes.push(start);
-                            return DijkstraResult {
+                            return PathResult {
                                 path: Some(nodes),
                                 distance: Some(distances[end]),
                                 heap_pops,
@@ -282,7 +277,82 @@ impl Graph {
         }
 
         // No path found
-        DijkstraResult {
+        PathResult {
+            path: None,
+            distance: None,
+            heap_pops,
+        }
+    }
+
+    pub fn a_star(&self, start: usize, end: usize) -> PathResult {
+        let end_lon = self.get_lon(end);
+        let end_lat = self.get_lat(end);
+        let mut nodes = Vec::new();
+
+        let node_count = self.raster_colums_count * self.raster_rows_count;
+
+        let mut previous_node = vec![std::u32::MAX; node_count];
+        let mut g_values = vec![std::u32::MAX; node_count];
+        let mut f_values = vec![std::u32::MAX; node_count];
+
+        let mut queue = BinaryHeap::with_capacity(node_count);
+        g_values[start] = 0;
+        f_values[start] =
+            Self::calculate_distance(self.get_lon(start), self.get_lat(start), end_lon, end_lat);
+        queue.push(HeapNode {
+            id: start as u32,
+            distance: 0,
+        });
+
+        let mut heap_pops: usize = 0;
+        while let Some(node) = queue.pop() {
+            heap_pops += 1;
+
+            for i in
+                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            {
+                let dest = self.edges[i].destination as usize;
+                let dist = self.edges[i].distance;
+                let g_value = g_values[node.id as usize] + dist;
+
+                if g_value < g_values[dest] {
+                    previous_node[dest] = node.id;
+                    g_values[dest] = g_value;
+                    let f_value = g_value
+                        + Self::calculate_distance(
+                            self.get_lon(dest),
+                            self.get_lat(dest),
+                            end_lon,
+                            end_lat,
+                        );
+                    f_values[dest] = f_value;
+
+                    if dest == end {
+                        let mut node = end;
+                        while node != start {
+                            nodes.push(node);
+                            node = previous_node[node] as usize;
+                        }
+                        nodes.push(start);
+                        return PathResult {
+                            path: Some(nodes),
+                            distance: Some(g_value),
+                            heap_pops,
+                        };
+                    }
+
+                    if !queue.iter().any(|x| x.id == dest as u32) {
+                        queue.push(HeapNode {
+                            id: dest as u32,
+                            distance: f_value,
+                        });
+                    }
+                }
+            }
+        }
+
+        // No path found
+        PathResult {
             path: None,
             distance: None,
             heap_pops,
