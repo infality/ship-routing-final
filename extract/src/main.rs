@@ -27,7 +27,7 @@ struct Coordinate {
 
 impl Coordinate {
     fn is_equal(&self, other: &Coordinate) -> bool {
-        return self.lon == other.lon && self.lat == other.lat;
+        self.lon == other.lon && self.lat == other.lat
     }
 
     fn get_lat(&self) -> f64 {
@@ -48,10 +48,10 @@ struct Coast {
 
 impl Coast {
     fn get_first(&self) -> Coordinate {
-        return self.coordinates.first().unwrap().clone();
+        *self.coordinates.first().unwrap()
     }
     fn get_last(&self) -> Coordinate {
-        return self.coordinates.last().unwrap().clone();
+        *self.coordinates.last().unwrap()
     }
 }
 
@@ -79,19 +79,21 @@ impl Coasts {
             counter += 1;
 
             match obj {
-                Ok(osmpbfreader::OsmObj::Node(n)) => drop(nodes.insert(
-                    n.id.0,
-                    Coordinate {
-                        lon: n.decimicro_lon,
-                        lat: n.decimicro_lat,
-                    },
-                )),
+                Ok(osmpbfreader::OsmObj::Node(n)) => {
+                    nodes.insert(
+                        n.id.0,
+                        Coordinate {
+                            lon: n.decimicro_lon,
+                            lat: n.decimicro_lat,
+                        },
+                    );
+                }
                 Ok(osmpbfreader::OsmObj::Way(w)) => {
                     let mut coordinates = Vec::<Coordinate>::with_capacity(w.nodes.len());
                     let mut leftmost = i32::MAX;
                     let mut rightmost = i32::MIN;
                     for node in w.nodes.iter() {
-                        let n = nodes.get(&node.0).unwrap().clone();
+                        let n = *nodes.get(&node.0).unwrap();
                         if n.lon < leftmost {
                             leftmost = n.lon;
                         }
@@ -101,7 +103,7 @@ impl Coasts {
                         coordinates.push(n);
                     }
                     coasts.insert(
-                        coordinates.first().unwrap().clone(),
+                        *coordinates.first().unwrap(),
                         Coast {
                             coordinates,
                             leftmost,
@@ -120,7 +122,7 @@ impl Coasts {
         let mut actual_coasts = Vec::<Coast>::new();
         let mut current_coast;
         {
-            let first_key = coasts.keys().next().unwrap().clone();
+            let first_key = *coasts.keys().next().unwrap();
             let first_coast = coasts.remove(&first_key).unwrap();
             current_coast = first_coast
         }
@@ -157,7 +159,7 @@ impl Coasts {
             if next_key.is_none() {
                 break;
             }
-            let next_key = next_key.unwrap().clone();
+            let next_key = *next_key.unwrap();
             let next_coast = coasts.remove(&next_key).unwrap();
             counter += 1;
             if counter % 1000 == 0 {
@@ -170,15 +172,18 @@ impl Coasts {
         println!("Created {} actual coasts", actual_coasts.len());
         println!("Finished merging coasts");
 
-        return Coasts { actual_coasts };
+        Coasts { actual_coasts }
     }
 
     fn new_from_binfile(filename: &str) -> Self {
         println!("Creating coasts from bin file: {}", filename);
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
         let coasts: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
-        println!("Created {} coasts from bin file", coasts.actual_coasts.len());
-        return coasts;
+        println!(
+            "Created {} coasts from bin file",
+            coasts.actual_coasts.len()
+        );
+        coasts
     }
 
     fn write_to_binfile(&self, filename: &str) {
@@ -357,7 +362,7 @@ impl Nodes {
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
         let nodes: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
         println!("Created {} nodes", nodes.nodes.len());
-        return nodes;
+        nodes
     }
 
     fn write_to_binfile(&self, filename: &str) {
@@ -471,7 +476,7 @@ impl GraphExt for Graph {
 
 fn transform_lon(p: &Coordinate, q: &Coordinate) -> f64 {
     if p.lat == 90 * FACTOR_INT {
-        return q.get_lon();
+        q.get_lon()
     } else {
         let plon_rad = p.get_lon().to_radians();
         let plat_rad = p.get_lat().to_radians();
@@ -480,23 +485,23 @@ fn transform_lon(p: &Coordinate, q: &Coordinate) -> f64 {
         let t = (qlon_rad - plon_rad).sin() * qlat_rad.cos();
         let b = qlat_rad.sin() * plat_rad.cos()
             - qlat_rad.cos() * plat_rad.sin() * (qlon_rad - plon_rad).cos();
-        return f64::atan2(t, b).to_degrees();
+        f64::atan2(t, b).to_degrees()
     }
 }
 
 fn east_or_west(clon: f64, dlon: f64) -> i32 {
     let mut del = dlon - clon;
     if del > 180.0 {
-        del = del - 360.0;
+        del -= 360.0;
     } else if del < -180.0 {
-        del = del + 360.0;
+        del += 360.0;
     }
     if del > 0.0 && del != 180.0 {
-        return -1;
+        -1
     } else if del < 0.0 && del != -180.0 {
-        return 1;
+        1
     } else {
-        return 0;
+        0
     }
 }
 
@@ -535,11 +540,11 @@ fn main() -> Result<(), Error> {
 
     let coasts;
     if !skip_read_pbf {
-        coasts = Coasts::new_from_pbffile(&file_name);
+        coasts = Coasts::new_from_pbffile(file_name);
         //coasts.write_to_geojson("coastlines.json");
         coasts.write_to_binfile("coastlines.bin");
     } else {
-        coasts = Coasts::new_from_binfile(&file_name);
+        coasts = Coasts::new_from_binfile(file_name);
         //coasts.write_to_geojson("coastlines.json");
     }
 

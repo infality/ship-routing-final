@@ -68,8 +68,7 @@ impl Graph {
         );
         now = Instant::now();
 
-        let mut coordinates = Vec::<[f64; 2]>::new();
-        coordinates.push([lon2, lat2]);
+        let mut coordinates = vec![[lon2, lat2]];
         let mut distance = 0;
 
         if nearest_start_node.is_none() || nearest_end_node.is_none() {
@@ -196,11 +195,12 @@ impl Graph {
         let lat_index_top = ((lat + 90.) * FACTOR) as usize / step_size_lat;
         let lat_index_bottom = (lat_index_top + 1) % self.raster_rows_count;
 
-        let mut neighbor_ids = vec![];
-        neighbor_ids.push((lat_index_top * self.raster_colums_count) + lon_index_left);
-        neighbor_ids.push((lat_index_top * self.raster_colums_count) + lon_index_right);
-        neighbor_ids.push((lat_index_bottom * self.raster_colums_count) + lon_index_left);
-        neighbor_ids.push((lat_index_bottom * self.raster_colums_count) + lon_index_right);
+        let neighbor_ids = vec![
+            (lat_index_top * self.raster_colums_count) + lon_index_left,
+            (lat_index_top * self.raster_colums_count) + lon_index_right,
+            (lat_index_bottom * self.raster_colums_count) + lon_index_left,
+            (lat_index_bottom * self.raster_colums_count) + lon_index_right,
+        ];
 
         let mut best_neighbor = neighbor_ids[0];
         let mut min_distance = u32::MAX;
@@ -294,7 +294,7 @@ impl Graph {
         let mut buf_reader = BufReader::new(File::open(&filename).unwrap());
         let graph: Self = bincode::deserialize_from(&mut buf_reader).unwrap();
         println!("Created Graph");
-        return graph;
+        graph
     }
 
     pub fn write_to_binfile(&self, filename: &str) {
