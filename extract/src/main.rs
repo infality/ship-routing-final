@@ -454,6 +454,9 @@ impl GraphExt for Graph {
 
             let neighbors = graph.get_neighbors(i);
             for neighbor in neighbors {
+                if !nodes.nodes[neighbor].is_water {
+                    continue;
+                }
                 let distance = Self::calculate_distance(
                     graph.get_lon(i),
                     graph.get_lat(i),
