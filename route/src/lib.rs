@@ -95,7 +95,7 @@ impl Graph {
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
             println!("Start node is not equal to end node. Executing dijkstra");
-            let result = self.dijkstra(nearest_start_node, nearest_end_node);
+            let result = self.a_star(nearest_start_node, nearest_end_node);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
                     "Dijkstra did not find a route and took {}ms",
@@ -293,12 +293,9 @@ impl Graph {
 
         let mut previous_node = vec![std::u32::MAX; node_count];
         let mut g_values = vec![std::u32::MAX; node_count];
-        let mut f_values = vec![std::u32::MAX; node_count];
 
         let mut queue = BinaryHeap::with_capacity(node_count);
         g_values[start] = 0;
-        f_values[start] =
-            Self::calculate_distance(self.get_lon(start), self.get_lat(start), end_lon, end_lat);
         queue.push(HeapNode {
             id: start as u32,
             distance: 0,
@@ -318,20 +315,12 @@ impl Graph {
                 if g_value < g_values[dest] {
                     previous_node[dest] = node.id;
                     g_values[dest] = g_value;
-                    let f_value = g_value
-                        + Self::calculate_distance(
-                            self.get_lon(dest),
-                            self.get_lat(dest),
-                            end_lon,
-                            end_lat,
-                        );
-                    f_values[dest] = f_value;
 
                     if dest == end {
-                        let mut node = end;
-                        while node != start {
-                            nodes.push(node);
-                            node = previous_node[node] as usize;
+                        let mut current_node = end;
+                        while current_node != start {
+                            nodes.push(current_node);
+                            current_node = previous_node[current_node] as usize;
                         }
                         nodes.push(start);
                         return PathResult {
@@ -341,12 +330,12 @@ impl Graph {
                         };
                     }
 
-                    if !queue.iter().any(|x| x.id == dest as u32) {
-                        queue.push(HeapNode {
-                            id: dest as u32,
-                            distance: f_value,
-                        });
-                    }
+                    queue.push(HeapNode {
+                        id: dest as u32,
+                        distance: g_value
+                            + (end_lon - self.get_lon(dest)).abs() as u32
+                            + ((end_lat - self.get_lat(dest)) * 100.0).abs() as u32,
+                    });
                 }
             }
         }
