@@ -333,8 +333,12 @@ impl Graph {
                     queue.push(HeapNode {
                         id: dest as u32,
                         distance: g_value
-                            + (end_lon - self.get_lon(dest)).abs() as u32
-                            + ((end_lat - self.get_lat(dest)) * 100.0).abs() as u32,
+                            + Self::calculate_distance(
+                                self.get_lon(dest),
+                                self.get_lat(dest),
+                                end_lon,
+                                end_lat,
+                            ),
                     });
                 }
             }

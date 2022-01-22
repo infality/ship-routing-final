@@ -2,3 +2,4 @@
 *.json
 *.pbf
 target/
+benchmark.txt

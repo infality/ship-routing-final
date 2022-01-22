@@ -51,14 +51,14 @@ fn main() {
         let min = differences[0];
         let max = differences[differences.len() - 1];
 
-        let width = (max as f64).log10().ceil() as usize;
+        let width = (max as f64).log10().ceil() as usize + 3;
         println!(
-            "\nAverage path nodes:  {:>1$}",
-            results
-                .iter()
-                .map(|x| x.path.as_ref().unwrap_or(&Vec::new()).len())
-                .sum::<usize>()
-                / results.len(),
+            "\nAverage diff/node:   {:>1$.3}km",
+            total as f64
+                / results
+                    .iter()
+                    .map(|x| x.path.as_ref().unwrap_or(&Vec::new()).len())
+                    .sum::<usize>() as f64,
             width
         );
         println!(
