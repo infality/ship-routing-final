@@ -41,15 +41,26 @@ fn main() {
             let d2 = results[i].distance.unwrap();
             let diff = if d1 > d2 { d1 - d2 } else { d2 - d1 };
             differences.push(diff as usize);
+
+            if diff > 1000 {
+                println!(
+                    "High diff: {}km (N{},E{}) -> (N{},E{})",
+                    diff as f64 / 1000.0,
+                    graph.get_lat(*start_node),
+                    graph.get_lon(*start_node),
+                    graph.get_lat(*end_node),
+                    graph.get_lon(*end_node)
+                );
+            }
         }
     }
 
     {
-        differences.sort();
-        let total: usize = differences.iter().sum();
-        let median = differences[differences.len() / 2];
-        let min = differences[0];
-        let max = differences[differences.len() - 1];
+        differences.sort_unstable();
+        let total = differences.iter().sum::<usize>() as f64 / 1000.0;
+        let median = differences[differences.len() / 2] as f64 / 1000.0;
+        let min = differences[0] as f64 / 1000.0;
+        let max = differences[differences.len() - 1] as f64 / 1000.0;
 
         let width = (max as f64).log10().ceil() as usize + 3;
         println!(
@@ -62,13 +73,13 @@ fn main() {
             width
         );
         println!(
-            "Average difference:  {:>1$}km",
-            total / differences.len(),
+            "Average difference:  {:>1$.3}km",
+            total / differences.len() as f64,
             width
         );
-        println!("Median difference:   {:>1$}km", median, width);
-        println!("Min difference:      {:>1$}km", min, width);
-        println!("Max difference:      {:>1$}km", max, width);
+        println!("Median difference:   {:>1$.3}km", median, width);
+        println!("Min difference:      {:>1$.3}km", min, width);
+        println!("Max difference:      {:>1$.3}km", max, width);
     }
     {
         let amount = chosen_nodes.len();
@@ -91,7 +102,7 @@ fn main() {
     }
     {
         let mut heap_pops: Vec<usize> = results.iter().map(|x| x.heap_pops).collect();
-        heap_pops.sort();
+        heap_pops.sort_unstable();
         let total: usize = heap_pops.iter().sum();
         let median = heap_pops[heap_pops.len() / 2];
         let min = heap_pops[0];

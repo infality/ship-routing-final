@@ -91,20 +91,20 @@ impl Graph {
         );
 
         if nearest_start_node == nearest_end_node {
-            println!("Start node is equal to end node. Skipping dijkstra");
+            println!("Start node is equal to end node. Skipping search algorithm");
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
-            println!("Start node is not equal to end node. Executing dijkstra");
+            println!("Start node is not equal to end node. Executing search algorithm");
             let result = self.a_star(nearest_start_node, nearest_end_node);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
-                    "Dijkstra did not find a route and took {}ms",
+                    "Search algorithm did not find a route and took {}ms",
                     now.elapsed().as_micros() as f32 / 1000.
                 );
                 return None;
             } else {
                 println!(
-                    "Dijkstra found a route and took {}ms",
+                    "Search algorithm found a route and took {}ms",
                     now.elapsed().as_micros() as f32 / 1000.
                 );
                 let path = result.path.unwrap();
@@ -117,12 +117,12 @@ impl Graph {
                 distance += Self::calculate_distance(
                     lon1,
                     lat1,
-                    self.get_lon(path[0]),
-                    self.get_lat(path[0]),
-                );
-                distance += Self::calculate_distance(
                     self.get_lon(*path.last().unwrap()),
                     self.get_lat(*path.last().unwrap()),
+                );
+                distance += Self::calculate_distance(
+                    self.get_lon(path[0]),
+                    self.get_lat(path[0]),
                     lon2,
                     lat2,
                 );
@@ -247,30 +247,28 @@ impl Graph {
             {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
+                let new_distance = distances[node.id as usize] + dist;
 
-                if distances[dest as usize] == std::u32::MAX {
-                    let new_distance = distances[node.id as usize] + dist;
-                    if new_distance < distances[dest as usize] {
-                        queue.push(HeapNode {
-                            id: dest,
-                            distance: new_distance,
-                        });
-                        distances[dest as usize] = new_distance;
-                        parent_nodes[dest as usize] = node.id;
-                        if dest as usize == end {
-                            // return if a path to the end is found
-                            let mut node = end;
-                            while node != start {
-                                nodes.push(node);
-                                node = parent_nodes[node] as usize;
-                            }
-                            nodes.push(start);
-                            return PathResult {
-                                path: Some(nodes),
-                                distance: Some(distances[end]),
-                                heap_pops,
-                            };
+                if new_distance < distances[dest as usize] {
+                    queue.push(HeapNode {
+                        id: dest,
+                        distance: new_distance,
+                    });
+                    distances[dest as usize] = new_distance;
+                    parent_nodes[dest as usize] = node.id;
+                    if dest as usize == end {
+                        // return if a path to the end is found
+                        let mut node = end;
+                        while node != start {
+                            nodes.push(node);
+                            node = parent_nodes[node] as usize;
                         }
+                        nodes.push(start);
+                        return PathResult {
+                            path: Some(nodes),
+                            distance: Some(distances[end]),
+                            heap_pops,
+                        };
                     }
                 }
             }
@@ -305,6 +303,20 @@ impl Graph {
         while let Some(node) = queue.pop() {
             heap_pops += 1;
 
+            if node.id == end as u32 {
+                let mut current_node = end;
+                while current_node != start {
+                    nodes.push(current_node);
+                    current_node = previous_node[current_node] as usize;
+                }
+                nodes.push(start);
+                return PathResult {
+                    path: Some(nodes),
+                    distance: Some(g_values[end]),
+                    heap_pops,
+                };
+            }
+
             for i in
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
             {
@@ -315,20 +327,6 @@ impl Graph {
                 if g_value < g_values[dest] {
                     previous_node[dest] = node.id;
                     g_values[dest] = g_value;
-
-                    if dest == end {
-                        let mut current_node = end;
-                        while current_node != start {
-                            nodes.push(current_node);
-                            current_node = previous_node[current_node] as usize;
-                        }
-                        nodes.push(start);
-                        return PathResult {
-                            path: Some(nodes),
-                            distance: Some(g_value),
-                            heap_pops,
-                        };
-                    }
 
                     queue.push(HeapNode {
                         id: dest as u32,
@@ -381,19 +379,16 @@ impl Graph {
     }
 
     pub fn calculate_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> u32 {
-        let plon_rad = (lon1).to_radians();
-        let plat_rad = (lat1).to_radians();
-        let qlon_rad = (lon2).to_radians();
-        let qlat_rad = (lat2).to_radians();
+        let plon_rad = lon1.to_radians();
+        let plat_rad = lat1.to_radians();
+        let qlon_rad = lon2.to_radians();
+        let qlat_rad = lat2.to_radians();
 
-        let lat_diff = qlat_rad - plat_rad;
-        let lon_diff = qlon_rad - plon_rad;
-
-        let a = (lat_diff / 2.0).sin() * (lat_diff / 2.0).sin()
-            + plat_rad.cos() * qlat_rad.cos() * (lon_diff / 2.0).sin() * (lon_diff / 2.0).sin();
-        let c = 2.0 * f64::atan2(a.sqrt(), (1.0 - a).sqrt());
-
-        (6371.0 * c) as u32
+        (6371000.0
+            * f64::acos(
+                plat_rad.cos() * qlat_rad.cos() * (plon_rad - qlon_rad).cos()
+                    + plat_rad.sin() * qlat_rad.sin(),
+            )) as u32
     }
 
     pub fn generate_random_water_nodes(&self, amount: usize) -> Vec<(usize, usize)> {

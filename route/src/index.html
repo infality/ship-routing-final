@@ -118,7 +118,7 @@
 
                 routeLayer.clearLayers();
                 routeLayer.addData(response.geojson);
-                document.getElementById("routeInfo").innerHTML = "Distance: " + response.distance.toFixed(3) + " km";
+                document.getElementById("routeInfo").innerHTML = "Distance: " + (response.distance / 1000).toFixed(0) + " km";
             });
         }
 
