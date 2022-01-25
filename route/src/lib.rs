@@ -242,6 +242,20 @@ impl Graph {
         while let Some(node) = queue.pop() {
             heap_pops += 1;
 
+            if node.id as usize == end {
+                let mut node = end;
+                while node != start {
+                    nodes.push(node);
+                    node = parent_nodes[node] as usize;
+                }
+                nodes.push(start);
+                return PathResult {
+                    path: Some(nodes),
+                    distance: Some(distances[end]),
+                    heap_pops,
+                };
+            }
+
             for i in
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
             {
@@ -256,20 +270,6 @@ impl Graph {
                     });
                     distances[dest as usize] = new_distance;
                     parent_nodes[dest as usize] = node.id;
-                    if dest as usize == end {
-                        // return if a path to the end is found
-                        let mut node = end;
-                        while node != start {
-                            nodes.push(node);
-                            node = parent_nodes[node] as usize;
-                        }
-                        nodes.push(start);
-                        return PathResult {
-                            path: Some(nodes),
-                            distance: Some(distances[end]),
-                            heap_pops,
-                        };
-                    }
                 }
             }
         }
