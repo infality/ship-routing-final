@@ -95,7 +95,7 @@ impl Graph {
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
             println!("Start node is not equal to end node. Executing search algorithm");
-            let result = self.a_star(nearest_start_node, nearest_end_node);
+            let result = self.dijkstra(nearest_start_node, nearest_end_node);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
                     "Search algorithm did not find a route and took {}ms",
