@@ -2,8 +2,7 @@ use rouille::Response;
 use std::env;
 
 mod lib;
-use lib::GEOJson;
-use lib::Graph;
+use lib::{AlgorithmState, GEOJson, Graph};
 
 #[derive(serde::Serialize)]
 struct RouteResponse {
@@ -42,7 +41,8 @@ fn main() {
                 println!("Marker 1 at: {},{}", input.lon1, input.lat1);
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
-                let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2);
+                let mut state = AlgorithmState::new(graph.raster_colums_count * graph.raster_rows_count);
+                let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2, &mut state);
                 println!("Done!\n");
                 if let Some((geojson, distance)) = result {
                     let route_response = RouteResponse {geojson, distance};

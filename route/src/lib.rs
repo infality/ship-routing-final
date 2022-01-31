@@ -51,6 +51,30 @@ pub struct PathResult {
     pub heap_pops: usize,
 }
 
+pub struct AlgorithmState {
+    pub distances: Vec<u32>,
+    pub parent_nodes: Vec<u32>,
+    pub queue: BinaryHeap<HeapNode>,
+}
+
+impl AlgorithmState {
+    pub fn new(node_count: usize) -> Self {
+        AlgorithmState {
+            distances: vec![std::u32::MAX; node_count],
+            parent_nodes: vec![std::u32::MAX; node_count],
+            queue: BinaryHeap::with_capacity(node_count),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for i in 0..self.distances.len() {
+            self.distances[i] = std::u32::MAX;
+            self.parent_nodes[i] = std::u32::MAX;
+        }
+        self.queue.clear();
+    }
+}
+
 impl Graph {
     pub fn find_path(
         &self,
@@ -58,6 +82,7 @@ impl Graph {
         lat1: f64,
         lon2: f64,
         lat2: f64,
+        state: &mut AlgorithmState,
     ) -> Option<(GEOJson<Vec<[f64; 2]>>, f64)> {
         let mut now = Instant::now();
         let nearest_start_node = self.find_nearest_node(lon1, lat1);
@@ -95,7 +120,7 @@ impl Graph {
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
             println!("Start node is not equal to end node. Executing search algorithm");
-            let result = self.dijkstra(nearest_start_node, nearest_end_node);
+            let result = self.dijkstra(nearest_start_node, nearest_end_node, state);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
                     "Search algorithm did not find a route and took {}ms",
@@ -222,36 +247,30 @@ impl Graph {
         Some(best_neighbor)
     }
 
-    pub fn dijkstra(&self, start: usize, end: usize) -> PathResult {
+    pub fn dijkstra(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let mut nodes = Vec::new();
+        state.reset();
 
-        let node_count = self.raster_colums_count * self.raster_rows_count;
-
-        let mut distances = vec![std::u32::MAX; node_count];
-        let mut parent_nodes = vec![std::u32::MAX; node_count];
-
-        let mut queue = BinaryHeap::with_capacity(node_count);
-
-        distances[start] = 0;
-        queue.push(HeapNode {
+        state.distances[start] = 0;
+        state.queue.push(HeapNode {
             id: start as u32,
             distance: 0,
         });
 
         let mut heap_pops: usize = 0;
-        while let Some(node) = queue.pop() {
+        while let Some(node) = state.queue.pop() {
             heap_pops += 1;
 
             if node.id as usize == end {
                 let mut node = end;
                 while node != start {
                     nodes.push(node);
-                    node = parent_nodes[node] as usize;
+                    node = state.parent_nodes[node] as usize;
                 }
                 nodes.push(start);
                 return PathResult {
                     path: Some(nodes),
-                    distance: Some(distances[end]),
+                    distance: Some(state.distances[end]),
                     heap_pops,
                 };
             }
@@ -261,15 +280,15 @@ impl Graph {
             {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
-                let new_distance = distances[node.id as usize] + dist;
+                let new_distance = state.distances[node.id as usize] + dist;
 
-                if new_distance < distances[dest as usize] {
-                    queue.push(HeapNode {
+                if new_distance < state.distances[dest as usize] {
+                    state.queue.push(HeapNode {
                         id: dest,
                         distance: new_distance,
                     });
-                    distances[dest as usize] = new_distance;
-                    parent_nodes[dest as usize] = node.id;
+                    state.distances[dest as usize] = new_distance;
+                    state.parent_nodes[dest as usize] = node.id;
                 }
             }
         }

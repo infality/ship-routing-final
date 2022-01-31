@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use route::Graph;
+use route::{AlgorithmState, Graph};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,13 +18,14 @@ fn main() {
     let graph = Graph::new_from_binfile(&args[1]);
     let chosen_nodes = graph.generate_random_water_nodes(100);
     let mut results = Vec::new();
+    let mut state = AlgorithmState::new(graph.raster_colums_count * graph.raster_rows_count);
 
     // Measure algorithm performance
     println!("Measuring performance...");
     let mut durations = Vec::new();
     for (start_node, end_node) in chosen_nodes.iter() {
         let start = Instant::now();
-        let result = graph.dijkstra(*start_node, *end_node);
+        let result = graph.dijkstra(*start_node, *end_node, &mut state);
         let end = Instant::now();
         durations.push(end - start);
         results.push(result);
@@ -34,7 +35,7 @@ fn main() {
     println!("Validating results...");
     let mut differences = Vec::new();
     for (i, (start_node, end_node)) in chosen_nodes.iter().enumerate() {
-        let result = graph.dijkstra(*start_node, *end_node);
+        let result = graph.dijkstra(*start_node, *end_node, &mut state);
         assert_eq!(result.distance.is_some(), results[i].distance.is_some());
         if result.distance.is_some() {
             let d1 = result.distance.unwrap();
