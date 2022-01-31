@@ -25,7 +25,7 @@ fn main() {
     let mut durations = Vec::new();
     for (start_node, end_node) in chosen_nodes.iter() {
         let start = Instant::now();
-        let result = graph.dijkstra(*start_node, *end_node, &mut state);
+        let result = graph.a_star(*start_node, *end_node, &mut state);
         let end = Instant::now();
         durations.push(end - start);
         results.push(result);

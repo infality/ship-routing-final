@@ -120,7 +120,7 @@ impl Graph {
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
             println!("Start node is not equal to end node. Executing search algorithm");
-            let result = self.dijkstra(nearest_start_node, nearest_end_node, state);
+            let result = self.a_star(nearest_start_node, nearest_end_node, state);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
                     "Search algorithm did not find a route and took {}ms",
@@ -301,37 +301,32 @@ impl Graph {
         }
     }
 
-    pub fn a_star(&self, start: usize, end: usize) -> PathResult {
+    pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
         let mut nodes = Vec::new();
+        state.reset();
 
-        let node_count = self.raster_colums_count * self.raster_rows_count;
-
-        let mut previous_node = vec![std::u32::MAX; node_count];
-        let mut g_values = vec![std::u32::MAX; node_count];
-
-        let mut queue = BinaryHeap::with_capacity(node_count);
-        g_values[start] = 0;
-        queue.push(HeapNode {
+        state.distances[start] = 0;
+        state.queue.push(HeapNode {
             id: start as u32,
             distance: 0,
         });
 
         let mut heap_pops: usize = 0;
-        while let Some(node) = queue.pop() {
+        while let Some(node) = state.queue.pop() {
             heap_pops += 1;
 
             if node.id == end as u32 {
                 let mut current_node = end;
                 while current_node != start {
                     nodes.push(current_node);
-                    current_node = previous_node[current_node] as usize;
+                    current_node = state.parent_nodes[current_node] as usize;
                 }
                 nodes.push(start);
                 return PathResult {
                     path: Some(nodes),
-                    distance: Some(g_values[end]),
+                    distance: Some(state.distances[end]),
                     heap_pops,
                 };
             }
@@ -341,13 +336,13 @@ impl Graph {
             {
                 let dest = self.edges[i].destination as usize;
                 let dist = self.edges[i].distance;
-                let g_value = g_values[node.id as usize] + dist;
+                let g_value = state.distances[node.id as usize] + dist;
 
-                if g_value < g_values[dest] {
-                    previous_node[dest] = node.id;
-                    g_values[dest] = g_value;
+                if g_value < state.distances[dest] {
+                    state.parent_nodes[dest] = node.id;
+                    state.distances[dest] = g_value;
 
-                    queue.push(HeapNode {
+                    state.queue.push(HeapNode {
                         id: dest as u32,
                         distance: g_value
                             + Self::calculate_distance(
