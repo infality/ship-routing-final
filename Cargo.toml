@@ -4,4 +4,5 @@ members = [
     "route",
     "extract",
     "benchmark",
+    "create_shortcuts",
 ]

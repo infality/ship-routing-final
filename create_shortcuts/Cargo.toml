@@ -1,0 +1,10 @@
+[package]
+name = "create_shortcuts"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+route = { path = "../route" }
+rouille = "3.4.0"
+serde = "1.0.130"
+serde_json = "1.0.72"
