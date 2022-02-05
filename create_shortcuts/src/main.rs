@@ -42,6 +42,7 @@ fn main() {
     rouille::start_server("localhost:8000", move |request| {
         rouille::router!(request,
             (GET) ["/"] => {
+                placed_rectangles.lock().unwrap().clear();
                 rouille::Response::html(html_file)
             },
 
@@ -88,10 +89,9 @@ fn main() {
                             }
                         }
                         if !is_left_done {
+                            left -= 1;
                             if left == 0 {
                                 is_left_done = true;
-                            } else {
-                                left -= 1;
                             }
                         }
                     }
@@ -107,10 +107,9 @@ fn main() {
                             }
                         }
                         if !is_top_done {
+                            top -= 1;
                             if top == 0 {
                                 is_top_done = true;
-                            } else {
-                                top -= 1;
                             }
                         }
                     }
@@ -126,10 +125,9 @@ fn main() {
                             }
                         }
                         if !is_right_done {
+                            right += 1;
                             if right == graph.raster_colums_count - 1 {
                                 is_right_done = true;
-                            } else {
-                                right += 1;
                             }
                         }
                     }
@@ -145,10 +143,9 @@ fn main() {
                             }
                         }
                         if !is_bottom_done {
+                            bottom += 1;
                             if bottom == graph.raster_rows_count - 1 {
                                 is_bottom_done = true;
-                            } else {
-                                bottom += 1;
                             }
                         }
                     }

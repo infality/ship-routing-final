@@ -37,7 +37,7 @@ impl PartialOrd for HeapNode {
     }
 }
 
-// Graph starts at bottom left, outer arrays are rows
+// Graph starts at top left, outer arrays are rows
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Graph {
     pub offsets: Vec<u32>,

@@ -344,6 +344,7 @@ impl Nodes {
 
         for lat in (-90 * FACTOR_INT..90 * FACTOR_INT)
             .step_by((180.0 * FACTOR / GRAPH_ROWS_COUNT as f64) as usize)
+            .rev()
         {
             for lon in (-180 * FACTOR_INT..180 * FACTOR_INT)
                 .step_by((360.0 * FACTOR / GRAPH_COLUMNS_COUNT as f64) as usize)
@@ -554,8 +555,8 @@ fn main() -> Result<(), Error> {
     let mut nodes = Nodes::new_generate_not_equally_distributed();
     nodes.set_water_flags(coasts);
 
-    //nodes.write_to_geojson("nodes.json");
-    //nodes.write_to_binfile("nodes.bin");
+    nodes.write_to_geojson("nodes.json");
+    nodes.write_to_binfile("nodes.bin");
     //let nodes = Nodes::new_from_binfile("nodes.bin");
     let graph = Graph::new_from_nodes(nodes, GRAPH_COLUMNS_COUNT, GRAPH_ROWS_COUNT);
     graph.write_to_binfile("graph.bin");
