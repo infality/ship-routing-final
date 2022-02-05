@@ -1,13 +1,31 @@
 use rouille::Response;
-use std::env;
+use std::{env, sync::Mutex};
 
 use route::{GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph};
 
 #[derive(serde::Serialize)]
-struct NodePositions {
-    geojson: GEOJson<Vec<f64>>,
+struct ShortcutRectangle {
+    geojson: GEOJson<[Vec<[f64; 2]>; 1]>,
 }
 
+fn is_water(graph: &Graph, col: usize, row: usize) -> bool {
+    let index = row * graph.raster_colums_count + col;
+    graph.offsets[index] != graph.offsets[index + 1]
+}
+
+fn is_colliding_with_any(
+    rects: &Vec<(usize, usize, usize, usize)>,
+    (left, top, right, bottom): (usize, usize, usize, usize),
+) -> bool {
+    for (rleft, rtop, rright, rbottom) in rects.iter() {
+        if left < *rright && right > *rleft && top < *rbottom && bottom > *rtop {
+            return true;
+        }
+    }
+    false
+}
+
+#[allow(unreachable_code)]
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -19,54 +37,152 @@ fn main() {
     let html_file = include_str!("index.html");
 
     let graph = Graph::new_from_binfile(&args[1]);
+    let placed_rectangles = Mutex::new(Vec::<(usize, usize, usize, usize)>::new()); // left, top, right, bottom
 
     rouille::start_server("localhost:8000", move |request| {
         rouille::router!(request,
-            (GET) (/) => {
+            (GET) ["/"] => {
                 rouille::Response::html(html_file)
             },
 
-            (POST) (/) => {
+            (POST) ["/"] => {
                 let input = rouille::try_or_400!(rouille::post_input!(request, {
-                    lat1: f64,
-                    lon1: f64,
-                    lat2: f64,
-                    lon2: f64,
+                    lat: f64,
+                    lon: f64,
                 }));
 
-                println!("Clicked at: {},{}", input.lon1, input.lat1);
+                println!("Clicked at: {},{}", input.lon, input.lat);
 
                 let mut geojson = GEOJson {
                     r#type: "FeatureCollection",
                     features: Vec::new(),
                 };
 
-                let node_positions = NodePositions { geojson };
+                let clicked_pos = graph.find_nearest_node(input.lon, input.lat);
+                if clicked_pos.is_none() {
+                    let node_positions = ShortcutRectangle { geojson };
+                    return Response::json(&node_positions);
+                }
+                let clicked_pos = clicked_pos.unwrap();
 
-                return Response::json(&node_positions);
-            },
+                // Row and columns of expanding rectangle
+                let mut left = clicked_pos % graph.raster_colums_count;
+                let mut right = left;
+                let mut top = clicked_pos / graph.raster_colums_count;
+                let mut bottom = top;
 
-            (GET) (/allPoints) => {
-                let mut geojson = GEOJson {
-                    r#type: "FeatureCollection",
-                    features: Vec::new(),
-                };
-
-                for i in 0..(graph.raster_rows_count * graph.raster_colums_count) {
-                    if graph.offsets[i] != graph.offsets[i + 1] {
-                        geojson.features.push(GEOJsonFeature {
-                            r#type: "Feature",
-                            properties: GEOJsonProperty {},
-                            geometry: GEOJsonGeometry {
-                                r#type: "Point",
-                                coordinates: vec![graph.get_lon(i), graph.get_lat(i)],
-                            },
-                        });
+                let mut is_left_done = false;
+                let mut is_right_done = false;
+                let mut is_top_done = false;
+                let mut is_bottom_done = false;
+                while !is_left_done || !is_top_done || !is_right_done || !is_bottom_done {
+                    if !is_left_done {
+                        for row in top..=bottom {
+                            if !is_water(&graph, left - 1, row) {
+                                is_left_done = true;
+                                break;
+                            }
+                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left - 1, top, right, bottom)) {
+                                is_left_done = true;
+                                break;
+                            }
+                        }
+                        if !is_left_done {
+                            if left == 0 {
+                                is_left_done = true;
+                            } else {
+                                left -= 1;
+                            }
+                        }
+                    }
+                    if !is_top_done {
+                        for col in left..=right {
+                            if !is_water(&graph, col, top - 1) {
+                                is_top_done = true;
+                                break;
+                            }
+                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top - 1, right, bottom)) {
+                                is_top_done = true;
+                                break;
+                            }
+                        }
+                        if !is_top_done {
+                            if top == 0 {
+                                is_top_done = true;
+                            } else {
+                                top -= 1;
+                            }
+                        }
+                    }
+                    if !is_right_done {
+                        for row in top..=bottom {
+                            if !is_water(&graph, right + 1, row) {
+                                is_right_done = true;
+                                break;
+                            }
+                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top, right + 1, bottom)) {
+                                is_right_done = true;
+                                break;
+                            }
+                        }
+                        if !is_right_done {
+                            if right == graph.raster_colums_count - 1 {
+                                is_right_done = true;
+                            } else {
+                                right += 1;
+                            }
+                        }
+                    }
+                    if !is_bottom_done {
+                        for col in left..=right {
+                            if !is_water(&graph, col, bottom + 1) {
+                                is_bottom_done = true;
+                                break;
+                            }
+                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top, right, bottom + 1)) {
+                                is_bottom_done = true;
+                                break;
+                            }
+                        }
+                        if !is_bottom_done {
+                            if bottom == graph.raster_rows_count - 1 {
+                                is_bottom_done = true;
+                            } else {
+                                bottom += 1;
+                            }
+                        }
                     }
                 }
 
-                let node_positions = NodePositions { geojson };
+                if left == right || top == bottom {
+                    let node_positions = ShortcutRectangle { geojson };
+                    return Response::json(&node_positions);
+                }
 
+                placed_rectangles.lock().unwrap().push((left, top, right, bottom));
+
+                println!("\nRectangles:");
+                for (left, top, right, bottom) in placed_rectangles.lock().unwrap().iter() {
+                    println!("{},{},{},{}", left, top, right, bottom);
+                }
+                println!();
+
+                geojson.features.push(GEOJsonFeature {
+                    r#type: "Feature",
+                    properties: GEOJsonProperty {},
+                    geometry: GEOJsonGeometry {
+                        r#type: "Polygon",
+                        coordinates: [vec![
+                            [graph.get_lon(left), graph.get_lat(top * graph.raster_colums_count)],
+                            [graph.get_lon(right), graph.get_lat(top * graph.raster_colums_count)],
+                            [graph.get_lon(right), graph.get_lat(bottom * graph.raster_colums_count)],
+                            [graph.get_lon(left), graph.get_lat(bottom * graph.raster_colums_count)],
+                            [graph.get_lon(left), graph.get_lat(top * graph.raster_colums_count)],
+                        ]],
+                    },
+                });
+
+                let node_positions = ShortcutRectangle { geojson };
                 return Response::json(&node_positions);
             },
 

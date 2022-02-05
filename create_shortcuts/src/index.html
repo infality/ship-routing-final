@@ -31,37 +31,18 @@
             font-size: 20px;
             color: #eee;
         }
-        .btn {
-            margin: 0 2px;
-            padding: 8px 16px;
-            color: #000;
-            border: 1px solid #000;
-            cursor: pointer;
-        }
-        #routeInfo {
-            margin-left: 10px;
-            color: #eee;
-        }
-        .myIcon {
-            color: black;
-            width: 10px;
-            height: 100px;
-            background: black;
-        }
     </style>
 </head>
 <body>
     <div class="bar">
-        <a class="title">Ship Routing</a>
-        <button class="btn" onclick="clearLayers()">Clear</button>
-        <a id="routeInfo"></a>
+        <a class="title">Ship Routing Shortcut Creation</a>
     </div>
 
     <div id="map"></div>
 
     <script>
+        console.log("A");
         var myMap = L.map('map', { preferCanvas: true }).setView([47.0, 16.0], 4);
-        var markerLayer = L.geoJSON().addTo(myMap);
         var routeLayer = L.geoJSON().addTo(myMap);
 
         L.tileLayer('https://tiles.fmi.uni-stuttgart.de/{z}/{x}/{y}.png', {
@@ -82,30 +63,15 @@
             maxWidth: 300
         }).addTo(myMap);
 
-        var startIcon = L.icon({
-            iconUrl: 'marker-icon',
-            iconSize:    [25, 41],
-            iconAnchor:  [12, 41],
-        });
 
-        var endIcon = L.icon({
-            iconUrl: 'marker-icon2',
-            iconSize:    [25, 41],
-            iconAnchor:  [12, 41],
-        });
+        function clearLayers() {
+            routeLayer.clearLayers();
+        }
 
-        var marker = L.marker();
-        var marker2 = L.marker();
-        marker.setIcon(startIcon);
-        marker2.setIcon(endIcon);
-
-
-        function calculateRoute() {
+        function onMapClick(e) {
             let params = new FormData();
-            params.append('lat1', marker.getLatLng().lat);
-            params.append('lon1', marker.getLatLng().lng);
-            params.append('lat2', marker2.getLatLng().lat);
-            params.append('lon2', marker2.getLatLng().lng);
+            params.append('lat', e.latlng.lat);
+            params.append('lon', e.latlng.lng);
             options = {
                 method: 'POST',
                 body: params
@@ -113,57 +79,11 @@
             fetch("http://localhost:8000/", options)
                 .then(response => response.json())
                 .then(response => {
-                if(!Object.keys(response).length){
-                    alert("No path could be found.");
-                    return;
-                }
-
-                routeLayer.clearLayers();
-                routeLayer.addData(response.geojson);
-                document.getElementById("routeInfo").innerHTML = "Distance: " + (response.distance / 1000).toFixed(0) + " km";
-            });
-        }
-
-        function clearLayers() {
-            routeLayer.clearLayers();
-            markerLayer.clearLayers();
-            marker.setLatLng(undefined);
-            marker2.setLatLng(undefined);
-            document.getElementById("routeInfo").innerHTML = "";
-        }
-
-        function onMapLoad(e) {
-            options = {
-                method: 'GET',
-            };
-            fetch("http://localhost:8000/allPoints", options)
-                .then(response => response.json())
-                .then(response => {
-                    routeLayer.clearLayers();
                     routeLayer.addData(response.geojson);
                 });
         }
 
-        function onMapClick(e) {
-            if (marker.getLatLng() == undefined) {
-                marker
-                    .setIcon(startIcon)
-                    .setLatLng(e.latlng)
-                    .addTo(markerLayer);
-                marker.dragging.enable();
-            } else {
-                if (marker2.getLatLng() == undefined) {
-                    marker2
-                        .setLatLng(e.latlng)
-                        .addTo(markerLayer);
-                    marker2.dragging.enable();
-                    calculateRoute();
-                }
-            }
-        }
-
         myMap.on('click', onMapClick);
-        myMap.whenReady(onMapLoad);
     </script>
 </body>
 </html>

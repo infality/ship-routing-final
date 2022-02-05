@@ -37,6 +37,7 @@ impl PartialOrd for HeapNode {
     }
 }
 
+// Graph starts at bottom left, outer arrays are rows
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Graph {
     pub offsets: Vec<u32>,
@@ -217,7 +218,7 @@ impl Graph {
         let lon_index_right = (lon_index_left + 1) % self.raster_colums_count;
 
         let step_size_lat = (180_0000000.0 / self.raster_rows_count as f64) as usize;
-        let lat_index_top = ((lat + 90.) * FACTOR) as usize / step_size_lat;
+        let lat_index_top = ((-lat + 90.) * FACTOR) as usize / step_size_lat;
         let lat_index_bottom = (lat_index_top + 1) % self.raster_rows_count;
 
         let neighbor_ids = vec![
@@ -389,7 +390,7 @@ impl Graph {
         let step_size = (180_0000000.0 / self.raster_rows_count as f64) as usize;
         let coordinate = (i / self.raster_colums_count) * step_size;
         let coordinate = coordinate as f64 / FACTOR;
-        coordinate - 90.0
+        90.0 - coordinate
     }
 
     pub fn calculate_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> u32 {
