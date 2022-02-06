@@ -13,16 +13,62 @@ fn is_water(graph: &Graph, col: usize, row: usize) -> bool {
     graph.offsets[index] != graph.offsets[index + 1]
 }
 
-fn is_colliding_with_any(
-    rects: &Vec<(usize, usize, usize, usize)>,
+fn find_colliding_rect(
+    rects: &[(usize, usize, usize, usize)],
     (left, top, right, bottom): (usize, usize, usize, usize),
-) -> bool {
-    for (rleft, rtop, rright, rbottom) in rects.iter() {
+) -> Option<usize> {
+    for (i, (rleft, rtop, rright, rbottom)) in rects.iter().enumerate() {
         if left < *rright && right > *rleft && top < *rbottom && bottom > *rtop {
-            return true;
+            return Some(i);
         }
     }
-    false
+    None
+}
+
+fn create_geojson(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> ShortcutRectangle {
+    println!("\nRectangles:");
+    for (left, top, right, bottom) in rects.iter() {
+        println!("{},{},{},{}", left, top, right, bottom);
+    }
+    println!();
+
+    let mut geojson = GEOJson {
+        r#type: "FeatureCollection",
+        features: Vec::new(),
+    };
+
+    for (left, top, right, bottom) in rects.iter() {
+        geojson.features.push(GEOJsonFeature {
+            r#type: "Feature",
+            properties: GEOJsonProperty {},
+            geometry: GEOJsonGeometry {
+                r#type: "Polygon",
+                coordinates: [vec![
+                    [
+                        graph.get_lon(*left),
+                        graph.get_lat(top * graph.raster_colums_count),
+                    ],
+                    [
+                        graph.get_lon(*right),
+                        graph.get_lat(top * graph.raster_colums_count),
+                    ],
+                    [
+                        graph.get_lon(*right),
+                        graph.get_lat(bottom * graph.raster_colums_count),
+                    ],
+                    [
+                        graph.get_lon(*left),
+                        graph.get_lat(bottom * graph.raster_colums_count),
+                    ],
+                    [
+                        graph.get_lon(*left),
+                        graph.get_lat(top * graph.raster_colums_count),
+                    ],
+                ]],
+            },
+        });
+    }
+    ShortcutRectangle { geojson }
 }
 
 #[allow(unreachable_code)]
@@ -47,6 +93,7 @@ fn main() {
             },
 
             (POST) ["/"] => {
+                let mut placed_rectangles = placed_rectangles.lock().unwrap();
                 let input = rouille::try_or_400!(rouille::post_input!(request, {
                     lat: f64,
                     lon: f64,
@@ -54,15 +101,9 @@ fn main() {
 
                 println!("Clicked at: {},{}", input.lon, input.lat);
 
-                let mut geojson = GEOJson {
-                    r#type: "FeatureCollection",
-                    features: Vec::new(),
-                };
-
                 let clicked_pos = graph.find_nearest_node(input.lon, input.lat);
                 if clicked_pos.is_none() {
-                    let node_positions = ShortcutRectangle { geojson };
-                    return Response::json(&node_positions);
+                    return Response::json(&create_geojson(&graph, &placed_rectangles));
                 }
                 let clicked_pos = clicked_pos.unwrap();
 
@@ -71,6 +112,11 @@ fn main() {
                 let mut right = left;
                 let mut top = clicked_pos / graph.raster_colums_count;
                 let mut bottom = top;
+
+                if let Some(rect) = find_colliding_rect(&placed_rectangles, (left,top,right,bottom)) {
+                    placed_rectangles.remove(rect);
+                    return Response::json(&create_geojson(&graph, &placed_rectangles));
+                }
 
                 let mut is_left_done = false;
                 let mut is_right_done = false;
@@ -83,7 +129,7 @@ fn main() {
                                 is_left_done = true;
                                 break;
                             }
-                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left - 1, top, right, bottom)) {
+                            if find_colliding_rect(&placed_rectangles, (left - 1, top, right, bottom)).is_some() {
                                 is_left_done = true;
                                 break;
                             }
@@ -101,7 +147,7 @@ fn main() {
                                 is_top_done = true;
                                 break;
                             }
-                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top - 1, right, bottom)) {
+                            if find_colliding_rect(&placed_rectangles, (left, top - 1, right, bottom)).is_some() {
                                 is_top_done = true;
                                 break;
                             }
@@ -119,7 +165,7 @@ fn main() {
                                 is_right_done = true;
                                 break;
                             }
-                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top, right + 1, bottom)) {
+                            if find_colliding_rect(&placed_rectangles, (left, top, right + 1, bottom)).is_some() {
                                 is_right_done = true;
                                 break;
                             }
@@ -137,7 +183,7 @@ fn main() {
                                 is_bottom_done = true;
                                 break;
                             }
-                            if is_colliding_with_any(&placed_rectangles.lock().unwrap(), (left, top, right, bottom + 1)) {
+                            if find_colliding_rect(&placed_rectangles, (left, top, right, bottom + 1)).is_some() {
                                 is_bottom_done = true;
                                 break;
                             }
@@ -152,35 +198,12 @@ fn main() {
                 }
 
                 if left == right || top == bottom {
-                    let node_positions = ShortcutRectangle { geojson };
-                    return Response::json(&node_positions);
+                    return Response::json(&create_geojson(&graph, &placed_rectangles));
                 }
 
-                placed_rectangles.lock().unwrap().push((left, top, right, bottom));
+                placed_rectangles.push((left, top, right, bottom));
 
-                println!("\nRectangles:");
-                for (left, top, right, bottom) in placed_rectangles.lock().unwrap().iter() {
-                    println!("{},{},{},{}", left, top, right, bottom);
-                }
-                println!();
-
-                geojson.features.push(GEOJsonFeature {
-                    r#type: "Feature",
-                    properties: GEOJsonProperty {},
-                    geometry: GEOJsonGeometry {
-                        r#type: "Polygon",
-                        coordinates: [vec![
-                            [graph.get_lon(left), graph.get_lat(top * graph.raster_colums_count)],
-                            [graph.get_lon(right), graph.get_lat(top * graph.raster_colums_count)],
-                            [graph.get_lon(right), graph.get_lat(bottom * graph.raster_colums_count)],
-                            [graph.get_lon(left), graph.get_lat(bottom * graph.raster_colums_count)],
-                            [graph.get_lon(left), graph.get_lat(top * graph.raster_colums_count)],
-                        ]],
-                    },
-                });
-
-                let node_positions = ShortcutRectangle { geojson };
-                return Response::json(&node_positions);
+                Response::json(&create_geojson(&graph, &placed_rectangles))
             },
 
             _ => Response::empty_404(),

@@ -79,6 +79,7 @@
             fetch("http://localhost:8000/", options)
                 .then(response => response.json())
                 .then(response => {
+                    clearLayers();
                     routeLayer.addData(response.geojson);
                 });
         }
