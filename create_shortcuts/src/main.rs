@@ -1,11 +1,15 @@
 use rouille::Response;
 use std::{env, sync::Mutex};
 
-use route::{GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph};
+use route::{Edge, GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph};
 
 #[derive(serde::Serialize)]
 struct ShortcutRectangle {
     geojson: GEOJson<[Vec<[f64; 2]>; 1]>,
+}
+
+fn get_index(graph: &Graph, col: usize, row: usize) -> usize {
+    row * graph.raster_colums_count + col
 }
 
 fn is_water(graph: &Graph, col: usize, row: usize) -> bool {
@@ -27,10 +31,13 @@ fn find_colliding_rect(
 
 fn create_geojson(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> ShortcutRectangle {
     println!("\nRectangles:");
-    for (left, top, right, bottom) in rects.iter() {
-        println!("{},{},{},{}", left, top, right, bottom);
+    for (i, (left, top, right, bottom)) in rects.iter().enumerate() {
+        print!("{},{},{},{}", left, top, right, bottom);
+        if i < rects.len() - 1 {
+            print!(";");
+        }
     }
-    println!();
+    println!("\n");
 
     let mut geojson = GEOJson {
         r#type: "FeatureCollection",
@@ -71,18 +78,128 @@ fn create_geojson(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Shor
     ShortcutRectangle { geojson }
 }
 
+fn add_edges(graph: &Graph, edges: &mut [Vec<Edge>], index1: usize, index2: usize) {
+    let distance = Graph::calculate_distance(
+        graph.get_lon(index1),
+        graph.get_lat(index1),
+        graph.get_lon(index2),
+        graph.get_lat(index2),
+    );
+    edges[index1].push(Edge {
+        destination: index2 as u32,
+        distance,
+    });
+    edges[index2].push(Edge {
+        destination: index1 as u32,
+        distance,
+    });
+}
+
+fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph {
+    let node_count = graph.raster_rows_count * graph.raster_colums_count;
+    let mut edges = vec![Vec::<Edge>::new(); node_count];
+
+    for i in 0..node_count {
+        for e in graph.offsets[i]..graph.offsets[i + 1] {
+            edges[i].push(graph.edges[e as usize]);
+        }
+    }
+
+    for (left, top, right, bottom) in rects.iter() {
+        for l in *top..=*bottom {
+            let li = get_index(&graph, *left, l);
+
+            for t in *left..=*right {
+                let ti = get_index(&graph, t, *top);
+                add_edges(&graph, &mut edges, li, ti);
+            }
+
+            for r in *top..=*bottom {
+                let ri = get_index(&graph, *right, r);
+                add_edges(&graph, &mut edges, li, ri);
+            }
+
+            for b in *left..=*right {
+                let bi = get_index(&graph, b, *bottom);
+                add_edges(&graph, &mut edges, li, bi);
+            }
+        }
+
+        for t in *left..=*right {
+            let ti = get_index(&graph, t, *top);
+
+            for r in *top..=*bottom {
+                let ri = get_index(&graph, *right, r);
+                add_edges(&graph, &mut edges, ti, ri);
+            }
+
+            for b in *left..=*right {
+                let bi = get_index(&graph, b, *bottom);
+                add_edges(&graph, &mut edges, ti, bi);
+            }
+        }
+
+        for r in *top..=*bottom {
+            let ri = get_index(&graph, *right, r);
+
+            for b in *left..=*right {
+                let bi = get_index(&graph, b, *bottom);
+                add_edges(&graph, &mut edges, ri, bi);
+            }
+        }
+    }
+
+    let mut new_graph = Graph {
+        offsets: Vec::with_capacity(node_count),
+        edges: Vec::new(),
+        raster_colums_count: graph.raster_colums_count,
+        raster_rows_count: graph.raster_rows_count,
+    };
+
+    for i in 0..node_count {
+        new_graph.offsets.push(new_graph.edges.len() as u32);
+        for edge in edges[i].iter() {
+            new_graph.edges.push(*edge);
+        }
+    }
+    new_graph.offsets.push(new_graph.edges.len() as u32);
+
+    new_graph
+}
+
 #[allow(unreachable_code)]
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Please pass a graph binary file");
+    if args.len() < 3 {
+        println!("Options:");
+        println!("  --select <graph file>");
+        println!("  --create <graph file> <shortcut rectangles>");
+        println!("\nTo either select shortcut rectangles or to create a new graph file with passed shortcut rectangles string (retrieved during selection)");
+        return;
+    }
+    let graph = Graph::new_from_binfile(&args[2]);
+
+    if args[1] == "--create" {
+        let mut rects = Vec::new();
+        for rect in args[3].split(';') {
+            let sides: Vec<&str> = rect.splitn(4, ',').collect();
+            let left = sides[0].parse().unwrap();
+            let top = sides[1].parse().unwrap();
+            let right = sides[2].parse().unwrap();
+            let bottom = sides[3].parse().unwrap();
+            rects.push((left, top, right, bottom));
+        }
+        let new_graph = create_graph(&graph, &rects);
+        new_graph.write_to_binfile("graph_shortcuts.bin");
+        return;
+    }
+    if args[1] != "--select" {
+        println!("Unknown option");
         return;
     }
 
     let html_file = include_str!("index.html");
-
-    let graph = Graph::new_from_binfile(&args[1]);
     let placed_rectangles = Mutex::new(Vec::<(usize, usize, usize, usize)>::new()); // left, top, right, bottom
 
     rouille::start_server("localhost:8000", move |request| {

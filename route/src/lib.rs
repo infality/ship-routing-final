@@ -10,7 +10,7 @@ use rand::Rng;
 
 const FACTOR: f64 = 10_000_000.0;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone)]
 pub struct Edge {
     pub destination: u32,
     pub distance: u32,
@@ -77,6 +77,18 @@ impl AlgorithmState {
 }
 
 impl Graph {
+    pub fn are_nodes_neighbors(&self, node1: usize, node2: usize) -> bool {
+        node1 - node2 == 1
+            || node2 - node1 == 1
+            || node1 - node2 == self.raster_colums_count - 1
+            || node2 - node1 == self.raster_colums_count - 1
+            || node1 - node2 == self.raster_colums_count
+            || node2 - node1 == self.raster_colums_count
+            || (node1 < self.raster_colums_count && node2 < self.raster_colums_count)
+            || (node1 >= self.raster_colums_count * self.raster_rows_count - 1
+                && node2 >= self.raster_colums_count * self.raster_rows_count - 1)
+    }
+
     pub fn find_path(
         &self,
         lon1: f64,
@@ -121,7 +133,7 @@ impl Graph {
             distance += Self::calculate_distance(lon1, lat1, lon2, lat2);
         } else {
             println!("Start node is not equal to end node. Executing search algorithm");
-            let result = self.a_star(nearest_start_node, nearest_end_node, state);
+            let result = self.a_star(nearest_start_node, nearest_end_node, state, true);
             if result.path.is_none() || result.distance.is_none() {
                 println!(
                     "Search algorithm did not find a route and took {}ms",
@@ -136,9 +148,24 @@ impl Graph {
                 let path = result.path.unwrap();
                 distance += result.distance.unwrap();
                 println!("Path length: {}", path.len());
-                for node in path.iter() {
-                    coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+
+                // Add path and resolve path if shortcuts have been taken
+                for (i, node) in path.iter().take(path.len() - 1).enumerate() {
+                    let next_node = path[i + 1];
+                    if self.are_nodes_neighbors(*node, next_node) {
+                        coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
+                        continue;
+                    }
+                    let shortcut_path = self.a_star(next_node, *node, state, false).path.unwrap();
+                    for shortcut_node in shortcut_path.iter().take(shortcut_path.len() - 1) {
+                        coordinates
+                            .push([self.get_lon(*shortcut_node), self.get_lat(*shortcut_node)]);
+                    }
                 }
+                coordinates.push([
+                    self.get_lon(path[path.len() - 1]),
+                    self.get_lat(path[path.len() - 1]),
+                ]);
 
                 distance += Self::calculate_distance(
                     lon1,
@@ -302,7 +329,13 @@ impl Graph {
         }
     }
 
-    pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
+    pub fn a_star(
+        &self,
+        start: usize,
+        end: usize,
+        state: &mut AlgorithmState,
+        allow_shortcuts: bool,
+    ) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
         let mut nodes = Vec::new();
@@ -336,6 +369,11 @@ impl Graph {
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
             {
                 let dest = self.edges[i].destination as usize;
+
+                if !allow_shortcuts && !self.are_nodes_neighbors(node.id as usize, dest) {
+                    continue;
+                }
+
                 let dist = self.edges[i].distance;
                 let g_value = state.distances[node.id as usize] + dist;
 
