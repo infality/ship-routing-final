@@ -2,18 +2,31 @@ use std::{
     env,
     fs::File,
     io::Write,
+    str::FromStr,
     time::{Duration, Instant},
 };
 
-use route::{AlgorithmState, Graph};
+use route::{AlgorithmState, ExecutionType, Graph};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Please pass a graph binary file");
+    if args.len() < 3 {
+        println!("Required: <Graph binary file> <execution type>");
+        println!("Possible execution types:");
+        for s in ExecutionType::get_strings() {
+            println!("  - {}", s);
+        }
         return;
     }
+
+    let execution_type = match FromStr::from_str(&args[2]) {
+        Ok(et) => et,
+        Err(()) => {
+            println!("Invalid execution type {}", &args[2]);
+            return;
+        }
+    };
 
     let graph = Graph::new_from_binfile(&args[1]);
     let chosen_nodes = graph.generate_random_water_nodes(100);
@@ -25,7 +38,20 @@ fn main() {
     let mut durations = Vec::new();
     for (start_node, end_node) in chosen_nodes.iter() {
         let start = Instant::now();
-        let result = graph.a_star(*start_node, *end_node, &mut state, true);
+
+        let result = match execution_type {
+            ExecutionType::Dijkstra => graph.dijkstra(*start_node, *end_node, &mut state),
+            ExecutionType::BiDijkstra => graph.bi_dijkstra(*start_node, *end_node, &mut state),
+            ExecutionType::AStar => graph.a_star(*start_node, *end_node, &mut state),
+            ExecutionType::BiAStar => graph.bi_a_star(*start_node, *end_node, &mut state),
+            ExecutionType::ShortcutDijkstra => {
+                graph.shortcut_dijkstra(*start_node, *end_node, &mut state)
+            }
+            ExecutionType::ShortcutAStar => {
+                graph.shortcut_a_star(*start_node, *end_node, &mut state)
+            }
+        };
+
         let end = Instant::now();
         durations.push(end - start);
         results.push(result);

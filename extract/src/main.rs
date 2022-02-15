@@ -445,6 +445,7 @@ impl GraphExt for Graph {
             edges: Vec::new(),
             raster_colums_count,
             raster_rows_count,
+            shortcut_rectangles: Vec::new(),
         };
 
         for (i, node) in nodes.nodes.iter().enumerate() {

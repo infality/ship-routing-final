@@ -1,8 +1,8 @@
 use rouille::Response;
-use std::env;
+use std::{env, str::FromStr};
 
 mod lib;
-use lib::{AlgorithmState, GEOJson, Graph};
+use lib::{AlgorithmState, ExecutionType, GEOJson, Graph};
 
 #[derive(serde::Serialize)]
 struct RouteResponse {
@@ -13,10 +13,22 @@ struct RouteResponse {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Please pass a graph binary file");
+    if args.len() < 3 {
+        println!("Required: <Graph binary file> <execution type>");
+        println!("Possible execution types:");
+        for s in ExecutionType::get_strings() {
+            println!("  - {}", s);
+        }
         return;
     }
+
+    let execution_type = match FromStr::from_str(&args[2]) {
+        Ok(et) => et,
+        Err(()) => {
+            println!("Invalid execution type {}", &args[2]);
+            return;
+        }
+    };
 
     let html_file = include_str!("index.html");
     let marker_icon = include_bytes!("marker-icon.png");
@@ -42,7 +54,7 @@ fn main() {
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
                 let mut state = AlgorithmState::new(graph.raster_colums_count * graph.raster_rows_count);
-                let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2, &mut state);
+                let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2, &execution_type, &mut state);
                 println!("Done!\n");
                 if let Some((geojson, distance)) = result {
                     let route_response = RouteResponse {geojson, distance};

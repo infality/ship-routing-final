@@ -99,52 +99,52 @@ fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph 
     let node_count = graph.raster_rows_count * graph.raster_colums_count;
     let mut edges = vec![Vec::<Edge>::new(); node_count];
 
-    for i in 0..node_count {
+    for (i, edge) in edges.iter_mut().enumerate() {
         for e in graph.offsets[i]..graph.offsets[i + 1] {
-            edges[i].push(graph.edges[e as usize]);
+            edge.push(graph.edges[e as usize]);
         }
     }
 
     for (left, top, right, bottom) in rects.iter() {
         for l in *top..=*bottom {
-            let li = get_index(&graph, *left, l);
+            let li = get_index(graph, *left, l);
 
             for t in *left..=*right {
-                let ti = get_index(&graph, t, *top);
-                add_edges(&graph, &mut edges, li, ti);
+                let ti = get_index(graph, t, *top);
+                add_edges(graph, &mut edges, li, ti);
             }
 
             for r in *top..=*bottom {
-                let ri = get_index(&graph, *right, r);
-                add_edges(&graph, &mut edges, li, ri);
+                let ri = get_index(graph, *right, r);
+                add_edges(graph, &mut edges, li, ri);
             }
 
             for b in *left..=*right {
-                let bi = get_index(&graph, b, *bottom);
-                add_edges(&graph, &mut edges, li, bi);
+                let bi = get_index(graph, b, *bottom);
+                add_edges(graph, &mut edges, li, bi);
             }
         }
 
         for t in *left..=*right {
-            let ti = get_index(&graph, t, *top);
+            let ti = get_index(graph, t, *top);
 
             for r in *top..=*bottom {
-                let ri = get_index(&graph, *right, r);
-                add_edges(&graph, &mut edges, ti, ri);
+                let ri = get_index(graph, *right, r);
+                add_edges(graph, &mut edges, ti, ri);
             }
 
             for b in *left..=*right {
-                let bi = get_index(&graph, b, *bottom);
-                add_edges(&graph, &mut edges, ti, bi);
+                let bi = get_index(graph, b, *bottom);
+                add_edges(graph, &mut edges, ti, bi);
             }
         }
 
         for r in *top..=*bottom {
-            let ri = get_index(&graph, *right, r);
+            let ri = get_index(graph, *right, r);
 
             for b in *left..=*right {
-                let bi = get_index(&graph, b, *bottom);
-                add_edges(&graph, &mut edges, ri, bi);
+                let bi = get_index(graph, b, *bottom);
+                add_edges(graph, &mut edges, ri, bi);
             }
         }
     }
@@ -154,11 +154,12 @@ fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph 
         edges: Vec::new(),
         raster_colums_count: graph.raster_colums_count,
         raster_rows_count: graph.raster_rows_count,
+        shortcut_rectangles: rects.to_vec(),
     };
 
-    for i in 0..node_count {
+    for edge in edges.iter() {
         new_graph.offsets.push(new_graph.edges.len() as u32);
-        for edge in edges[i].iter() {
+        for edge in edge.iter() {
             new_graph.edges.push(*edge);
         }
     }
