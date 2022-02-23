@@ -417,33 +417,38 @@ impl Nodes {
 }
 
 trait GraphExt {
-    fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph;
+    fn new_from_nodes(nodes: Nodes, raster_columns_count: usize, raster_rows_count: usize)
+        -> Graph;
     fn get_neighbors(&self, i: usize) -> Vec<usize>;
 }
 
 impl GraphExt for Graph {
     fn get_neighbors(&self, i: usize) -> Vec<usize> {
         let mut neighbors = Vec::new();
-        let row = i / self.raster_colums_count;
+        let row = i / self.raster_columns_count;
 
         if row > 0 {
-            neighbors.push(i - self.raster_colums_count);
+            neighbors.push(i - self.raster_columns_count);
         }
         if row < self.raster_rows_count - 1 {
-            neighbors.push(i + self.raster_colums_count);
+            neighbors.push(i + self.raster_columns_count);
         }
 
-        neighbors.push(row * self.raster_colums_count + ((i + 1) % self.raster_colums_count));
-        neighbors.push(row * self.raster_colums_count + ((i - 1) % self.raster_colums_count));
+        neighbors.push(row * self.raster_columns_count + ((i + 1) % self.raster_columns_count));
+        neighbors.push(row * self.raster_columns_count + ((i - 1) % self.raster_columns_count));
         neighbors
     }
 
-    fn new_from_nodes(nodes: Nodes, raster_colums_count: usize, raster_rows_count: usize) -> Graph {
+    fn new_from_nodes(
+        nodes: Nodes,
+        raster_columns_count: usize,
+        raster_rows_count: usize,
+    ) -> Graph {
         println!("Generating graph from nodes");
         let mut graph = Graph {
             offsets: Vec::new(),
             edges: Vec::new(),
-            raster_colums_count,
+            raster_columns_count,
             raster_rows_count,
             shortcut_rectangles: Vec::new(),
         };

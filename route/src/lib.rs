@@ -74,7 +74,7 @@ impl PartialOrd for HeapNode {
 pub struct Graph {
     pub offsets: Vec<u32>,
     pub edges: Vec<Edge>,
-    pub raster_colums_count: usize,
+    pub raster_columns_count: usize,
     pub raster_rows_count: usize,
     pub shortcut_rectangles: Vec<(usize, usize, usize, usize)>,
 }
@@ -139,10 +139,10 @@ pub struct GEOJsonProperty {}
 
 impl Graph {
     pub fn is_node_inside_rect(&self, node: usize, rect: (usize, usize, usize, usize)) -> bool {
-        rect.0 < node % self.raster_colums_count
-            && rect.1 < node / self.raster_rows_count
-            && node % self.raster_colums_count < rect.2
-            && node / self.raster_rows_count < rect.3
+        rect.0 < node % self.raster_columns_count
+            && rect.1 < node / self.raster_columns_count
+            && node % self.raster_columns_count < rect.2
+            && node / self.raster_columns_count < rect.3
     }
 
     pub fn find_path(
@@ -154,6 +154,7 @@ impl Graph {
         execution_type: &ExecutionType,
         state: &mut AlgorithmState,
     ) -> Option<(GEOJson<Vec<[f64; 2]>>, f64)> {
+        //) -> Option<(GEOJson<[f64; 2]>, f64)> {
         let mut now = Instant::now();
         let nearest_start_node = self.find_nearest_node(lon1, lat1);
         let nearest_end_node = self.find_nearest_node(lon2, lat2);
@@ -282,6 +283,17 @@ impl Graph {
                     properties: GEOJsonProperty {},
                 });
 
+                /* for c in line_coordinates.iter() {
+                    geojson.features.push(GEOJsonFeature {
+                        r#type: "Feature",
+                        geometry: GEOJsonGeometry {
+                            r#type: "Point",
+                            coordinates: *c,
+                        },
+                        properties: GEOJsonProperty {},
+                    });
+                } */
+
                 line_start = i;
                 lon_start = -lon_end;
             }
@@ -302,23 +314,34 @@ impl Graph {
             properties: GEOJsonProperty {},
         });
 
+        /* for c in line_coordinates.iter() {
+            geojson.features.push(GEOJsonFeature {
+                r#type: "Feature",
+                geometry: GEOJsonGeometry {
+                    r#type: "Point",
+                    coordinates: *c,
+                },
+                properties: GEOJsonProperty {},
+            });
+        } */
+
         Some((geojson, distance as f64))
     }
 
     pub fn find_nearest_node(&self, lon: f64, lat: f64) -> Option<usize> {
-        let step_size_lon = (360_0000000.0 / self.raster_colums_count as f64) as usize;
+        let step_size_lon = (360_0000000.0 / self.raster_columns_count as f64) as usize;
         let lon_index_left = ((lon + 180.) * FACTOR) as usize / step_size_lon;
-        let lon_index_right = (lon_index_left + 1) % self.raster_colums_count;
+        let lon_index_right = (lon_index_left + 1) % self.raster_columns_count;
 
         let step_size_lat = (180_0000000.0 / self.raster_rows_count as f64) as usize;
         let lat_index_top = ((-lat + 90.) * FACTOR) as usize / step_size_lat;
         let lat_index_bottom = (lat_index_top + 1) % self.raster_rows_count;
 
         let neighbor_ids = vec![
-            (lat_index_top * self.raster_colums_count) + lon_index_left,
-            (lat_index_top * self.raster_colums_count) + lon_index_right,
-            (lat_index_bottom * self.raster_colums_count) + lon_index_left,
-            (lat_index_bottom * self.raster_colums_count) + lon_index_right,
+            (lat_index_top * self.raster_columns_count) + lon_index_left,
+            (lat_index_top * self.raster_columns_count) + lon_index_right,
+            (lat_index_bottom * self.raster_columns_count) + lon_index_left,
+            (lat_index_bottom * self.raster_columns_count) + lon_index_right,
         ];
 
         let mut best_neighbor = neighbor_ids[0];
@@ -356,15 +379,15 @@ impl Graph {
     }
 
     pub fn get_lon(&self, i: usize) -> f64 {
-        let step_size = (360_0000000.0 / self.raster_colums_count as f64) as usize;
-        let coordinate = (i % self.raster_colums_count) * step_size;
+        let step_size = (360_0000000.0 / self.raster_columns_count as f64) as usize;
+        let coordinate = (i % self.raster_columns_count) * step_size;
         let coordinate = coordinate as f64 / FACTOR;
         coordinate - 180.0
     }
 
     pub fn get_lat(&self, i: usize) -> f64 {
         let step_size = (180_0000000.0 / self.raster_rows_count as f64) as usize;
-        let coordinate = (i / self.raster_colums_count) * step_size;
+        let coordinate = (i / self.raster_columns_count) * step_size;
         let coordinate = coordinate as f64 / FACTOR;
         90.0 - coordinate
     }
@@ -384,7 +407,7 @@ impl Graph {
 
     pub fn generate_random_water_nodes(&self, amount: usize) -> Vec<(usize, usize)> {
         let mut water_nodes = Vec::new();
-        for i in 0..(self.raster_rows_count * self.raster_colums_count) {
+        for i in 0..(self.raster_rows_count * self.raster_columns_count) {
             if self.offsets[i] != self.offsets[i + 1] {
                 water_nodes.push(i);
             }
@@ -551,25 +574,25 @@ impl Graph {
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
             {
                 let dest = self.edges[i].destination as usize;
-
-                // Skip neighbor if it is inside a shortcut rectangle and the end node is not
-                let mut skip = false;
-                for rect in self.shortcut_rectangles.iter() {
-                    if self.is_node_inside_rect(dest, *rect)
-                        && !self.is_node_inside_rect(end, *rect)
-                    {
-                        skip = true;
-                        break;
-                    }
-                }
-                if skip {
-                    continue;
-                }
-
                 let dist = self.edges[i].distance;
                 let new_distance = state.distances[node.id as usize] + dist;
 
                 if new_distance < state.distances[dest] {
+                    // Skip neighbor if it is inside a shortcut rectangle and the end node is not
+                    let mut skip = false;
+                    for rect in self.shortcut_rectangles.iter() {
+                        if self.is_node_inside_rect(dest, *rect)
+                            && !self.is_node_inside_rect(start, *rect)
+                            && !self.is_node_inside_rect(end, *rect)
+                        {
+                            skip = true;
+                            break;
+                        }
+                    }
+                    if skip {
+                        continue;
+                    }
+
                     state.queue.push(HeapNode {
                         id: dest as u32,
                         distance: new_distance,
@@ -753,25 +776,25 @@ impl Graph {
                 self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
             {
                 let dest = self.edges[i].destination as usize;
-
-                // Skip neighbor if it is inside a shortcut rectangle and the end node is not
-                let mut skip = false;
-                for rect in self.shortcut_rectangles.iter() {
-                    if self.is_node_inside_rect(dest, *rect)
-                        && !self.is_node_inside_rect(end, *rect)
-                    {
-                        skip = true;
-                        break;
-                    }
-                }
-                if skip {
-                    continue;
-                }
-
                 let dist = self.edges[i].distance;
                 let g_value = state.distances[node.id as usize] + dist;
 
                 if g_value < state.distances[dest] {
+                    // Skip neighbor if it is inside a shortcut rectangle and the end node is not
+                    let mut skip = false;
+                    for rect in self.shortcut_rectangles.iter() {
+                        if self.is_node_inside_rect(dest, *rect)
+                            && !self.is_node_inside_rect(start, *rect)
+                            && !self.is_node_inside_rect(end, *rect)
+                        {
+                            skip = true;
+                            break;
+                        }
+                    }
+                    if skip {
+                        continue;
+                    }
+
                     state.parent_nodes[dest] = node.id;
                     state.distances[dest] = g_value;
 

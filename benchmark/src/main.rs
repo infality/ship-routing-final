@@ -31,7 +31,7 @@ fn main() {
     let graph = Graph::new_from_binfile(&args[1]);
     let chosen_nodes = graph.generate_random_water_nodes(100);
     let mut results = Vec::new();
-    let mut state = AlgorithmState::new(graph.raster_colums_count * graph.raster_rows_count);
+    let mut state = AlgorithmState::new(graph.raster_columns_count * graph.raster_rows_count);
 
     // Measure algorithm performance
     println!("Measuring performance...");

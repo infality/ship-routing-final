@@ -9,11 +9,11 @@ struct ShortcutRectangle {
 }
 
 fn get_index(graph: &Graph, col: usize, row: usize) -> usize {
-    row * graph.raster_colums_count + col
+    row * graph.raster_columns_count + col
 }
 
 fn is_water(graph: &Graph, col: usize, row: usize) -> bool {
-    let index = row * graph.raster_colums_count + col;
+    let index = row * graph.raster_columns_count + col;
     graph.offsets[index] != graph.offsets[index + 1]
 }
 
@@ -53,23 +53,23 @@ fn create_geojson(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Shor
                 coordinates: [vec![
                     [
                         graph.get_lon(*left),
-                        graph.get_lat(top * graph.raster_colums_count),
+                        graph.get_lat(top * graph.raster_columns_count),
                     ],
                     [
                         graph.get_lon(*right),
-                        graph.get_lat(top * graph.raster_colums_count),
+                        graph.get_lat(top * graph.raster_columns_count),
                     ],
                     [
                         graph.get_lon(*right),
-                        graph.get_lat(bottom * graph.raster_colums_count),
+                        graph.get_lat(bottom * graph.raster_columns_count),
                     ],
                     [
                         graph.get_lon(*left),
-                        graph.get_lat(bottom * graph.raster_colums_count),
+                        graph.get_lat(bottom * graph.raster_columns_count),
                     ],
                     [
                         graph.get_lon(*left),
-                        graph.get_lat(top * graph.raster_colums_count),
+                        graph.get_lat(top * graph.raster_columns_count),
                     ],
                 ]],
             },
@@ -96,7 +96,7 @@ fn add_edges(graph: &Graph, edges: &mut [Vec<Edge>], index1: usize, index2: usiz
 }
 
 fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph {
-    let node_count = graph.raster_rows_count * graph.raster_colums_count;
+    let node_count = graph.raster_rows_count * graph.raster_columns_count;
     let mut edges = vec![Vec::<Edge>::new(); node_count];
 
     for (i, edge) in edges.iter_mut().enumerate() {
@@ -152,7 +152,7 @@ fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph 
     let mut new_graph = Graph {
         offsets: Vec::with_capacity(node_count),
         edges: Vec::new(),
-        raster_colums_count: graph.raster_colums_count,
+        raster_columns_count: graph.raster_columns_count,
         raster_rows_count: graph.raster_rows_count,
         shortcut_rectangles: rects.to_vec(),
     };
@@ -226,9 +226,9 @@ fn main() {
                 let clicked_pos = clicked_pos.unwrap();
 
                 // Row and columns of expanding rectangle
-                let mut left = clicked_pos % graph.raster_colums_count;
+                let mut left = clicked_pos % graph.raster_columns_count;
                 let mut right = left;
-                let mut top = clicked_pos / graph.raster_colums_count;
+                let mut top = clicked_pos / graph.raster_columns_count;
                 let mut bottom = top;
 
                 if let Some(rect) = find_colliding_rect(&placed_rectangles, (left,top,right,bottom)) {
@@ -290,7 +290,7 @@ fn main() {
                         }
                         if !is_right_done {
                             right += 1;
-                            if right == graph.raster_colums_count - 1 {
+                            if right == graph.raster_columns_count - 1 {
                                 is_right_done = true;
                             }
                         }

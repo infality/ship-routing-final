@@ -7,6 +7,7 @@ use lib::{AlgorithmState, ExecutionType, GEOJson, Graph};
 #[derive(serde::Serialize)]
 struct RouteResponse {
     geojson: GEOJson<Vec<[f64; 2]>>,
+    //geojson: GEOJson<[f64; 2]>,
     distance: f64,
 }
 
@@ -53,7 +54,7 @@ fn main() {
                 println!("Marker 1 at: {},{}", input.lon1, input.lat1);
                 println!("Marker 2 at: {},{}", input.lon2, input.lat2);
 
-                let mut state = AlgorithmState::new(graph.raster_colums_count * graph.raster_rows_count);
+                let mut state = AlgorithmState::new(graph.raster_columns_count * graph.raster_rows_count);
                 let result = graph.find_path(input.lon1, input.lat1, input.lon2, input.lat2, &execution_type, &mut state);
                 println!("Done!\n");
                 if let Some((geojson, distance)) = result {
