@@ -95,6 +95,11 @@ pub struct AlgorithmState {
     pub distances: Vec<u32>,
     pub parent_nodes: Vec<u32>,
     pub queue: BinaryHeap<HeapNode>,
+
+    // Used for bidirectional algorithms
+    pub distances2: Vec<u32>,
+    pub parent_nodes2: Vec<u32>,
+    pub queue2: BinaryHeap<HeapNode>,
 }
 
 impl AlgorithmState {
@@ -103,6 +108,10 @@ impl AlgorithmState {
             distances: vec![std::u32::MAX; node_count],
             parent_nodes: vec![std::u32::MAX; node_count],
             queue: BinaryHeap::with_capacity(node_count),
+
+            distances2: vec![std::u32::MAX; node_count],
+            parent_nodes2: vec![std::u32::MAX; node_count],
+            queue2: BinaryHeap::with_capacity(node_count),
         }
     }
 
@@ -110,8 +119,11 @@ impl AlgorithmState {
         for i in 0..self.distances.len() {
             self.distances[i] = std::u32::MAX;
             self.parent_nodes[i] = std::u32::MAX;
+            self.distances2[i] = std::u32::MAX;
+            self.parent_nodes2[i] = std::u32::MAX;
         }
         self.queue.clear();
+        self.queue2.clear();
     }
 }
 
@@ -430,7 +442,6 @@ impl Graph {
     //
 
     pub fn dijkstra(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
-        let mut nodes = Vec::new();
         state.reset();
 
         state.distances[start] = 0;
@@ -444,6 +455,7 @@ impl Graph {
             heap_pops += 1;
 
             if node.id as usize == end {
+                let mut nodes = Vec::new();
                 let mut node = end;
                 while node != start {
                     nodes.push(node);
@@ -484,29 +496,53 @@ impl Graph {
     }
 
     pub fn bi_dijkstra(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
-        let mut nodes = Vec::new();
         state.reset();
+        let mut shortest_distance = std::u32::MAX;
+        let mut middle_node = 0;
 
         state.distances[start] = 0;
         state.queue.push(HeapNode {
             id: start as u32,
             distance: 0,
         });
+        state.distances2[end] = 0;
+        state.queue2.push(HeapNode {
+            id: end as u32,
+            distance: 0,
+        });
 
         let mut heap_pops: usize = 0;
         while let Some(node) = state.queue.pop() {
-            heap_pops += 1;
+            let node2 = state.queue2.pop();
+            if node2.is_none() {
+                break;
+            }
+            let node2 = node2.unwrap();
 
-            if node.id as usize == end {
-                let mut node = end;
-                while node != start {
-                    nodes.push(node);
-                    node = state.parent_nodes[node] as usize;
+            heap_pops += 2;
+
+            if state.distances[node.id as usize] + state.distances2[node2.id as usize]
+                >= shortest_distance
+            {
+                let mut nodes = Vec::new();
+                let mut n = middle_node;
+                while n != end {
+                    nodes.push(n);
+                    n = state.parent_nodes2[n] as usize;
                 }
+                nodes.push(end);
+                nodes.reverse();
+
+                n = state.parent_nodes[middle_node] as usize;
+                while n != start {
+                    nodes.push(n);
+                    n = state.parent_nodes[n] as usize;
+                }
+
                 nodes.push(start);
                 return PathResult {
                     path: Some(nodes),
-                    distance: Some(state.distances[end]),
+                    distance: Some(state.distances[middle_node] + state.distances2[middle_node]),
                     heap_pops,
                 };
             }
@@ -525,6 +561,165 @@ impl Graph {
                     });
                     state.distances[dest as usize] = new_distance;
                     state.parent_nodes[dest as usize] = node.id;
+
+                    if state.distances2[dest as usize] != std::u32::MAX {
+                        let d = state.distances[node.id as usize]
+                            + dist
+                            + state.distances2[dest as usize];
+                        if d < shortest_distance {
+                            shortest_distance = d;
+                            middle_node = dest as usize;
+                        }
+                    }
+                }
+            }
+
+            for i in self.offsets[node2.id as usize] as usize
+                ..self.offsets[node2.id as usize + 1] as usize
+            {
+                let dest = self.edges[i].destination;
+                let dist = self.edges[i].distance;
+                let new_distance = state.distances2[node2.id as usize] + dist;
+
+                if new_distance < state.distances2[dest as usize] {
+                    state.queue2.push(HeapNode {
+                        id: dest,
+                        distance: new_distance,
+                    });
+                    state.distances2[dest as usize] = new_distance;
+                    state.parent_nodes2[dest as usize] = node2.id;
+
+                    if state.distances[dest as usize] != std::u32::MAX {
+                        let d = state.distances[dest as usize]
+                            + dist
+                            + state.distances2[node2.id as usize];
+                        if d < shortest_distance {
+                            shortest_distance = d;
+                            middle_node = dest as usize;
+                        }
+                    }
+                }
+            }
+        }
+
+        // No path found
+        PathResult {
+            path: None,
+            distance: None,
+            heap_pops,
+        }
+    }
+
+    pub fn bi_dijkstra_parallel(
+        &self,
+        start: usize,
+        end: usize,
+        state: &mut AlgorithmState,
+    ) -> PathResult {
+        state.reset();
+        let mut shortest_distance = std::u32::MAX;
+        let mut middle_node = 0;
+
+        state.distances[start] = 0;
+        state.queue.push(HeapNode {
+            id: start as u32,
+            distance: 0,
+        });
+        state.distances2[end] = 0;
+        state.queue2.push(HeapNode {
+            id: end as u32,
+            distance: 0,
+        });
+
+        let thread1 = std::thread::spawn(|| {});
+
+        let mut heap_pops: usize = 0;
+        while let Some(node) = state.queue.pop() {
+            let node2 = state.queue2.pop();
+            if node2.is_none() {
+                break;
+            }
+            let node2 = node2.unwrap();
+
+            heap_pops += 2;
+
+            if state.distances[node.id as usize] + state.distances2[node2.id as usize]
+                >= shortest_distance
+            {
+                let mut nodes = Vec::new();
+                let mut n = middle_node;
+                while n != end {
+                    nodes.push(n);
+                    n = state.parent_nodes2[n] as usize;
+                }
+                nodes.push(end);
+                nodes.reverse();
+
+                n = state.parent_nodes[middle_node] as usize;
+                while n != start {
+                    nodes.push(n);
+                    n = state.parent_nodes[n] as usize;
+                }
+
+                nodes.push(start);
+                return PathResult {
+                    path: Some(nodes),
+                    distance: Some(state.distances[middle_node] + state.distances2[middle_node]),
+                    heap_pops,
+                };
+            }
+
+            for i in
+                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            {
+                let dest = self.edges[i].destination;
+                let dist = self.edges[i].distance;
+                let new_distance = state.distances[node.id as usize] + dist;
+
+                if new_distance < state.distances[dest as usize] {
+                    state.queue.push(HeapNode {
+                        id: dest,
+                        distance: new_distance,
+                    });
+                    state.distances[dest as usize] = new_distance;
+                    state.parent_nodes[dest as usize] = node.id;
+
+                    if state.distances2[dest as usize] != std::u32::MAX {
+                        let d = state.distances[node.id as usize]
+                            + dist
+                            + state.distances2[dest as usize];
+                        if d < shortest_distance {
+                            shortest_distance = d;
+                            middle_node = dest as usize;
+                        }
+                    }
+                }
+            }
+
+            for i in self.offsets[node2.id as usize] as usize
+                ..self.offsets[node2.id as usize + 1] as usize
+            {
+                let dest = self.edges[i].destination;
+                let dist = self.edges[i].distance;
+                let new_distance = state.distances2[node2.id as usize] + dist;
+
+                if new_distance < state.distances2[dest as usize] {
+                    state.queue2.push(HeapNode {
+                        id: dest,
+                        distance: new_distance,
+                    });
+                    state.distances2[dest as usize] = new_distance;
+                    state.parent_nodes2[dest as usize] = node2.id;
+
+                    if state.distances[dest as usize] != std::u32::MAX {
+                        let d = state.distances[dest as usize]
+                            + dist
+                            + state.distances2[node2.id as usize];
+                        if d < shortest_distance {
+                            shortest_distance = d;
+                            middle_node = dest as usize;
+                        }
+                    }
                 }
             }
         }
@@ -543,7 +738,6 @@ impl Graph {
         end: usize,
         state: &mut AlgorithmState,
     ) -> PathResult {
-        let mut nodes = Vec::new();
         state.reset();
 
         state.distances[start] = 0;
@@ -557,6 +751,7 @@ impl Graph {
             heap_pops += 1;
 
             if node.id as usize == end {
+                let mut nodes = Vec::new();
                 let mut node = end;
                 while node != start {
                     nodes.push(node);
@@ -614,7 +809,6 @@ impl Graph {
     pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
-        let mut nodes = Vec::new();
         state.reset();
 
         state.distances[start] = 0;
@@ -628,6 +822,7 @@ impl Graph {
             heap_pops += 1;
 
             if node.id == end as u32 {
+                let mut nodes = Vec::new();
                 let mut current_node = end;
                 while current_node != start {
                     nodes.push(current_node);
@@ -677,7 +872,6 @@ impl Graph {
     pub fn bi_a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
-        let mut nodes = Vec::new();
         state.reset();
 
         state.distances[start] = 0;
@@ -691,6 +885,7 @@ impl Graph {
             heap_pops += 1;
 
             if node.id == end as u32 {
+                let mut nodes = Vec::new();
                 let mut current_node = end;
                 while current_node != start {
                     nodes.push(current_node);
@@ -745,7 +940,6 @@ impl Graph {
     ) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
-        let mut nodes = Vec::new();
         state.reset();
 
         state.distances[start] = 0;
@@ -759,6 +953,7 @@ impl Graph {
             heap_pops += 1;
 
             if node.id == end as u32 {
+                let mut nodes = Vec::new();
                 let mut current_node = end;
                 while current_node != start {
                     nodes.push(current_node);
