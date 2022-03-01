@@ -610,128 +610,6 @@ impl Graph {
         }
     }
 
-    pub fn bi_dijkstra_parallel(
-        &self,
-        start: usize,
-        end: usize,
-        state: &mut AlgorithmState,
-    ) -> PathResult {
-        state.reset();
-        let mut shortest_distance = std::u32::MAX;
-        let mut middle_node = 0;
-
-        state.distances[start] = 0;
-        state.queue.push(HeapNode {
-            id: start as u32,
-            distance: 0,
-        });
-        state.distances2[end] = 0;
-        state.queue2.push(HeapNode {
-            id: end as u32,
-            distance: 0,
-        });
-
-        let thread1 = std::thread::spawn(|| {});
-
-        let mut heap_pops: usize = 0;
-        while let Some(node) = state.queue.pop() {
-            let node2 = state.queue2.pop();
-            if node2.is_none() {
-                break;
-            }
-            let node2 = node2.unwrap();
-
-            heap_pops += 2;
-
-            if state.distances[node.id as usize] + state.distances2[node2.id as usize]
-                >= shortest_distance
-            {
-                let mut nodes = Vec::new();
-                let mut n = middle_node;
-                while n != end {
-                    nodes.push(n);
-                    n = state.parent_nodes2[n] as usize;
-                }
-                nodes.push(end);
-                nodes.reverse();
-
-                n = state.parent_nodes[middle_node] as usize;
-                while n != start {
-                    nodes.push(n);
-                    n = state.parent_nodes[n] as usize;
-                }
-
-                nodes.push(start);
-                return PathResult {
-                    path: Some(nodes),
-                    distance: Some(state.distances[middle_node] + state.distances2[middle_node]),
-                    heap_pops,
-                };
-            }
-
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
-            {
-                let dest = self.edges[i].destination;
-                let dist = self.edges[i].distance;
-                let new_distance = state.distances[node.id as usize] + dist;
-
-                if new_distance < state.distances[dest as usize] {
-                    state.queue.push(HeapNode {
-                        id: dest,
-                        distance: new_distance,
-                    });
-                    state.distances[dest as usize] = new_distance;
-                    state.parent_nodes[dest as usize] = node.id;
-
-                    if state.distances2[dest as usize] != std::u32::MAX {
-                        let d = state.distances[node.id as usize]
-                            + dist
-                            + state.distances2[dest as usize];
-                        if d < shortest_distance {
-                            shortest_distance = d;
-                            middle_node = dest as usize;
-                        }
-                    }
-                }
-            }
-
-            for i in self.offsets[node2.id as usize] as usize
-                ..self.offsets[node2.id as usize + 1] as usize
-            {
-                let dest = self.edges[i].destination;
-                let dist = self.edges[i].distance;
-                let new_distance = state.distances2[node2.id as usize] + dist;
-
-                if new_distance < state.distances2[dest as usize] {
-                    state.queue2.push(HeapNode {
-                        id: dest,
-                        distance: new_distance,
-                    });
-                    state.distances2[dest as usize] = new_distance;
-                    state.parent_nodes2[dest as usize] = node2.id;
-
-                    if state.distances[dest as usize] != std::u32::MAX {
-                        let d = state.distances[dest as usize]
-                            + dist
-                            + state.distances2[node2.id as usize];
-                        if d < shortest_distance {
-                            shortest_distance = d;
-                            middle_node = dest as usize;
-                        }
-                    }
-                }
-            }
-        }
-
-        // No path found
-        PathResult {
-            path: None,
-            distance: None,
-            heap_pops,
-        }
-    }
-
     pub fn shortcut_dijkstra(
         &self,
         start: usize,
@@ -869,6 +747,7 @@ impl Graph {
         }
     }
 
+    // TODO
     pub fn bi_a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
