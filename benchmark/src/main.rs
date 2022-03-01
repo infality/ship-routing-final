@@ -6,13 +6,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use route::{AlgorithmState, ExecutionType, Graph};
+use route::{AlgorithmState, ExecutionType, Graph, PathResult};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 3 {
-        println!("Required: <Graph binary file> <execution type>");
+    if args.len() < 4 {
+        println!("Required: <Graph binary file> <Shortcut graph binary file> <execution type>");
         println!("Possible execution types:");
         for s in ExecutionType::get_strings() {
             println!("  - {}", s);
@@ -20,52 +20,139 @@ fn main() {
         return;
     }
 
-    let execution_type = match FromStr::from_str(&args[2]) {
-        Ok(et) => et,
-        Err(()) => {
-            println!("Invalid execution type {}", &args[2]);
-            return;
+    let execute_all = &args[3].to_lowercase() == "all";
+
+    let execution_type = if execute_all {
+        ExecutionType::Dijkstra
+    } else {
+        match FromStr::from_str(&args[3]) {
+            Ok(et) => et,
+            Err(()) => {
+                println!("Invalid execution type {}", &args[3]);
+                return;
+            }
         }
     };
 
     let graph = Graph::new_from_binfile(&args[1]);
+    let shortcut_graph = Graph::new_from_binfile(&args[2]);
     let chosen_nodes = graph.generate_random_water_nodes(100);
-    let mut results = Vec::new();
     let mut state = AlgorithmState::new(graph.raster_columns_count * graph.raster_rows_count);
 
-    // Measure algorithm performance
-    println!("Measuring performance...");
+    if !execute_all {
+        let g = if execution_type.uses_shortcut() {
+            &shortcut_graph
+        } else {
+            &graph
+        };
+        println!("Measuring performance...");
+        let (results, mut durations) =
+            measure_performance(g, &mut state, &chosen_nodes, execution_type);
+
+        println!("Validating results...");
+        let mut correct_results = Vec::new();
+        for (start_node, end_node) in chosen_nodes.iter() {
+            correct_results.push(graph.dijkstra(*start_node, *end_node, &mut state));
+        }
+
+        let mut differences = validate_results(&correct_results, &results, g, &chosen_nodes);
+
+        print_statistics(&mut differences, &results, &chosen_nodes, &mut durations);
+
+        let mut file = File::create("benchmark.txt").unwrap();
+        write!(
+            file,
+            "{}",
+            durations
+                .iter()
+                .map(|x| format!("{}", get_milliseconds(x)))
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
+        .unwrap();
+    } else {
+        println!("Calculating correct results...");
+        let mut correct_results = Vec::new();
+        for (start_node, end_node) in chosen_nodes.iter() {
+            correct_results.push(graph.dijkstra(*start_node, *end_node, &mut state));
+        }
+
+        let mut statistics = Vec::new();
+        for algorithm in ExecutionType::get_strings() {
+            println!("Measuring performance for {}", algorithm);
+            let execution_type = ExecutionType::from_str(algorithm).unwrap();
+            let g = if execution_type.uses_shortcut() {
+                &shortcut_graph
+            } else {
+                &graph
+            };
+            let (results, durations) =
+                measure_performance(g, &mut state, &chosen_nodes, execution_type);
+            statistics.push((results, durations, Vec::<usize>::new()));
+        }
+
+        for (i, algorithm) in ExecutionType::get_strings().iter().enumerate() {
+            println!("Validating {}", algorithm);
+            let execution_type = ExecutionType::from_str(algorithm).unwrap();
+            let g = if execution_type.uses_shortcut() {
+                &shortcut_graph
+            } else {
+                &graph
+            };
+            let differences =
+                validate_results(&correct_results, &statistics[i].0, g, &chosen_nodes);
+            statistics[i].2 = differences;
+        }
+
+        for (i, (results, durations, differences)) in statistics.iter_mut().enumerate() {
+            println!("\n{} statistics:", ExecutionType::get_strings()[i]);
+            print_statistics(differences, results, &chosen_nodes, durations);
+        }
+    }
+}
+
+fn measure_performance(
+    graph: &Graph,
+    state: &mut AlgorithmState,
+    chosen_nodes: &[(usize, usize)],
+    execution_type: ExecutionType,
+) -> (Vec<PathResult>, Vec<Duration>) {
+    let mut results = Vec::new();
     let mut durations = Vec::new();
     for (start_node, end_node) in chosen_nodes.iter() {
         let start = Instant::now();
 
         let result = match execution_type {
-            ExecutionType::Dijkstra => graph.dijkstra(*start_node, *end_node, &mut state),
-            ExecutionType::BiDijkstra => graph.bi_dijkstra(*start_node, *end_node, &mut state),
-            ExecutionType::AStar => graph.a_star(*start_node, *end_node, &mut state),
-            ExecutionType::BiAStar => graph.bi_a_star(*start_node, *end_node, &mut state),
+            ExecutionType::Dijkstra => graph.dijkstra(*start_node, *end_node, state),
+            ExecutionType::BiDijkstra => graph.bi_dijkstra(*start_node, *end_node, state),
+            ExecutionType::AStar => graph.a_star(*start_node, *end_node, state),
             ExecutionType::ShortcutDijkstra => {
-                graph.shortcut_dijkstra(*start_node, *end_node, &mut state)
+                graph.shortcut_dijkstra(*start_node, *end_node, state)
             }
-            ExecutionType::ShortcutAStar => {
-                graph.shortcut_a_star(*start_node, *end_node, &mut state)
-            }
+            ExecutionType::ShortcutAStar => graph.shortcut_a_star(*start_node, *end_node, state),
         };
 
         let end = Instant::now();
         durations.push(end - start);
         results.push(result);
     }
+    (results, durations)
+}
 
-    // Validate results with dijkstra
-    println!("Validating results...");
+fn validate_results(
+    correct_results: &[PathResult],
+    results: &[PathResult],
+    graph: &Graph,
+    chosen_nodes: &[(usize, usize)],
+) -> Vec<usize> {
     let mut differences = Vec::new();
     for (i, (start_node, end_node)) in chosen_nodes.iter().enumerate() {
-        let result = graph.dijkstra(*start_node, *end_node, &mut state);
-        assert_eq!(result.distance.is_some(), results[i].distance.is_some());
-        if result.distance.is_some() {
-            let d1 = result.distance.unwrap();
-            let d2 = results[i].distance.unwrap();
+        let correct_result = &correct_results[i];
+        let result = &results[i];
+        assert_eq!(correct_result.distance.is_some(), result.distance.is_some());
+        if correct_result.distance.is_some() {
+            let d1 = correct_result.distance.unwrap();
+            let d2 = result.distance.unwrap();
             let diff = if d1 > d2 { d1 - d2 } else { d2 - d1 };
             differences.push(diff as usize);
 
@@ -81,7 +168,15 @@ fn main() {
             }
         }
     }
+    differences
+}
 
+fn print_statistics(
+    differences: &mut Vec<usize>,
+    results: &[PathResult],
+    chosen_nodes: &[(usize, usize)],
+    durations: &mut Vec<Duration>,
+) {
     {
         differences.sort_unstable();
         let total = differences.iter().sum::<usize>() as f64 / 1000.0;
@@ -142,18 +237,6 @@ fn main() {
         println!("Min:      {:>1$}", min, width);
         println!("Max:      {:>1$}", max, width);
     }
-
-    let mut file = File::create("benchmark.txt").unwrap();
-    write!(
-        file,
-        "{}",
-        durations
-            .iter()
-            .map(|x| format!("{}", get_milliseconds(x)))
-            .collect::<Vec<String>>()
-            .join("\n")
-    )
-    .unwrap();
 }
 
 fn get_milliseconds(duration: &Duration) -> f64 {

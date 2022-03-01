@@ -15,7 +15,6 @@ pub enum ExecutionType {
     Dijkstra,
     BiDijkstra,
     AStar,
-    BiAStar,
     ShortcutDijkstra,
     ShortcutAStar,
 }
@@ -26,10 +25,16 @@ impl ExecutionType {
             "Dijkstra",
             "BiDijkstra",
             "AStar",
-            "BiAStar",
             "ShortcutDijkstra",
             "ShortcutAStar",
         ]
+    }
+
+    pub fn uses_shortcut(&self) -> bool {
+        matches!(
+            self,
+            ExecutionType::ShortcutDijkstra | ExecutionType::ShortcutAStar
+        )
     }
 }
 
@@ -40,7 +45,6 @@ impl FromStr for ExecutionType {
             "dijkstra" => Ok(ExecutionType::Dijkstra),
             "bidijkstra" => Ok(ExecutionType::BiDijkstra),
             "astar" => Ok(ExecutionType::AStar),
-            "biastar" => Ok(ExecutionType::BiAStar),
             "shortcutdijkstra" => Ok(ExecutionType::ShortcutDijkstra),
             "shortcutastar" => Ok(ExecutionType::ShortcutAStar),
             _ => Err(()),
@@ -211,9 +215,6 @@ impl Graph {
                     self.bi_dijkstra(nearest_start_node, nearest_end_node, state)
                 }
                 ExecutionType::AStar => self.a_star(nearest_start_node, nearest_end_node, state),
-                ExecutionType::BiAStar => {
-                    self.bi_a_star(nearest_start_node, nearest_end_node, state)
-                }
                 ExecutionType::ShortcutDijkstra => {
                     self.shortcut_dijkstra(nearest_start_node, nearest_end_node, state)
                 }
@@ -685,70 +686,6 @@ impl Graph {
     }
 
     pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
-        let end_lon = self.get_lon(end);
-        let end_lat = self.get_lat(end);
-        state.reset();
-
-        state.distances[start] = 0;
-        state.queue.push(HeapNode {
-            id: start as u32,
-            distance: 0,
-        });
-
-        let mut heap_pops: usize = 0;
-        while let Some(node) = state.queue.pop() {
-            heap_pops += 1;
-
-            if node.id == end as u32 {
-                let mut nodes = Vec::new();
-                let mut current_node = end;
-                while current_node != start {
-                    nodes.push(current_node);
-                    current_node = state.parent_nodes[current_node] as usize;
-                }
-                nodes.push(start);
-                return PathResult {
-                    path: Some(nodes),
-                    distance: Some(state.distances[end]),
-                    heap_pops,
-                };
-            }
-
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
-            {
-                let dest = self.edges[i].destination as usize;
-                let dist = self.edges[i].distance;
-                let g_value = state.distances[node.id as usize] + dist;
-
-                if g_value < state.distances[dest] {
-                    state.parent_nodes[dest] = node.id;
-                    state.distances[dest] = g_value;
-
-                    state.queue.push(HeapNode {
-                        id: dest as u32,
-                        distance: g_value
-                            + Self::calculate_distance(
-                                self.get_lon(dest),
-                                self.get_lat(dest),
-                                end_lon,
-                                end_lat,
-                            ),
-                    });
-                }
-            }
-        }
-
-        // No path found
-        PathResult {
-            path: None,
-            distance: None,
-            heap_pops,
-        }
-    }
-
-    // TODO
-    pub fn bi_a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
         state.reset();
