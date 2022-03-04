@@ -8,3 +8,4 @@ route = { path = "../route" }
 rouille = "3.4.0"
 serde = "1.0.130"
 serde_json = "1.0.72"
+rayon = "1.5"

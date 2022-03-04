@@ -1,7 +1,10 @@
+use rayon::prelude::*;
 use rouille::Response;
 use std::{env, sync::Mutex};
 
-use route::{Edge, GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph};
+use route::{
+    AlgorithmState, Edge, GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph,
+};
 
 #[derive(serde::Serialize)]
 struct ShortcutRectangle {
@@ -78,13 +81,15 @@ fn create_geojson(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Shor
     ShortcutRectangle { geojson }
 }
 
-fn add_edges(graph: &Graph, edges: &mut [Vec<Edge>], index1: usize, index2: usize) {
-    let distance = Graph::calculate_distance(
-        graph.get_lon(index1),
-        graph.get_lat(index1),
-        graph.get_lon(index2),
-        graph.get_lat(index2),
-    );
+// Add edges for both directions
+fn add_edges(
+    graph: &Graph,
+    edges: &mut [Vec<Edge>],
+    index1: usize,
+    index2: usize,
+    state: &mut AlgorithmState,
+) {
+    let distance = graph.bi_dijkstra(index1, index2, state).distance.unwrap();
     edges[index1].push(Edge {
         destination: index2 as u32,
         distance,
@@ -97,67 +102,91 @@ fn add_edges(graph: &Graph, edges: &mut [Vec<Edge>], index1: usize, index2: usiz
 
 fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph {
     let node_count = graph.raster_rows_count * graph.raster_columns_count;
-    let mut edges = vec![Vec::<Edge>::new(); node_count];
+    let edges = Mutex::new(vec![Vec::<Edge>::new(); node_count]);
 
-    for (i, edge) in edges.iter_mut().enumerate() {
+    // Add original graph edges
+    for (i, edge) in edges.lock().unwrap().iter_mut().enumerate() {
         for e in graph.offsets[i]..graph.offsets[i + 1] {
             edge.push(graph.edges[e as usize]);
         }
     }
 
-    for (left, top, right, bottom) in rects.iter() {
-        for l in *top..=*bottom {
-            let li = get_index(graph, *left, l);
+    // Use multiple threads to add all possible shortcut edges for each rectangle
+    rects
+        .par_iter()
+        .enumerate()
+        .for_each(|(i, (left, top, right, bottom))| {
+            let left_count = bottom - top;
+            let top_count = right - left;
+            println!(
+                "Starting thread to add edges for rectangle {}/{} ({} distance calculations)",
+                i + 1,
+                rects.len(),
+                4 * left_count * top_count + left_count * left_count + top_count * top_count
+            );
+
+            let mut state = AlgorithmState::new(node_count);
+            let mut local_edges = vec![Vec::<Edge>::new(); node_count];
+            for l in *top..=*bottom {
+                let li = get_index(graph, *left, l);
+
+                for t in *left..=*right {
+                    let ti = get_index(graph, t, *top);
+                    add_edges(graph, &mut local_edges, li, ti, &mut state);
+                }
+
+                for r in *top..=*bottom {
+                    let ri = get_index(graph, *right, r);
+                    add_edges(graph, &mut local_edges, li, ri, &mut state);
+                }
+
+                for b in *left..=*right {
+                    let bi = get_index(graph, b, *bottom);
+                    add_edges(graph, &mut local_edges, li, bi, &mut state);
+                }
+            }
 
             for t in *left..=*right {
                 let ti = get_index(graph, t, *top);
-                add_edges(graph, &mut edges, li, ti);
+
+                for r in *top..=*bottom {
+                    let ri = get_index(graph, *right, r);
+                    add_edges(graph, &mut local_edges, ti, ri, &mut state);
+                }
+
+                for b in *left..=*right {
+                    let bi = get_index(graph, b, *bottom);
+                    add_edges(graph, &mut local_edges, ti, bi, &mut state);
+                }
             }
 
             for r in *top..=*bottom {
                 let ri = get_index(graph, *right, r);
-                add_edges(graph, &mut edges, li, ri);
+
+                for b in *left..=*right {
+                    let bi = get_index(graph, b, *bottom);
+                    add_edges(graph, &mut local_edges, ri, bi, &mut state);
+                }
             }
 
-            for b in *left..=*right {
-                let bi = get_index(graph, b, *bottom);
-                add_edges(graph, &mut edges, li, bi);
+            let mut edges_lock = edges.lock().unwrap();
+            for (i, node_edges) in local_edges.iter().enumerate() {
+                for dest in node_edges.iter() {
+                    edges_lock[i].push(*dest);
+                }
             }
-        }
-
-        for t in *left..=*right {
-            let ti = get_index(graph, t, *top);
-
-            for r in *top..=*bottom {
-                let ri = get_index(graph, *right, r);
-                add_edges(graph, &mut edges, ti, ri);
-            }
-
-            for b in *left..=*right {
-                let bi = get_index(graph, b, *bottom);
-                add_edges(graph, &mut edges, ti, bi);
-            }
-        }
-
-        for r in *top..=*bottom {
-            let ri = get_index(graph, *right, r);
-
-            for b in *left..=*right {
-                let bi = get_index(graph, b, *bottom);
-                add_edges(graph, &mut edges, ri, bi);
-            }
-        }
-    }
+            println!("Thread for rectangle {} finished", i + 1);
+        });
 
     let mut new_graph = Graph {
-        offsets: Vec::with_capacity(node_count),
+        offsets: Vec::with_capacity(node_count + 1),
         edges: Vec::new(),
         raster_columns_count: graph.raster_columns_count,
         raster_rows_count: graph.raster_rows_count,
         shortcut_rectangles: rects.to_vec(),
     };
 
-    for edge in edges.iter() {
+    for edge in edges.lock().unwrap().iter() {
         new_graph.offsets.push(new_graph.edges.len() as u32);
         for edge in edge.iter() {
             new_graph.edges.push(*edge);

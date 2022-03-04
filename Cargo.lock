@@ -182,6 +182,7 @@ dependencies = [
 name = "create_shortcuts"
 version = "0.1.0"
 dependencies = [
+ "rayon",
  "rouille",
  "route",
  "serde",
