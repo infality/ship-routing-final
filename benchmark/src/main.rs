@@ -108,6 +108,21 @@ fn main() {
             println!("\n{} statistics:", ExecutionType::get_strings()[i]);
             print_statistics(differences, results, &chosen_nodes, durations);
         }
+
+        for (i, algorithm) in ExecutionType::get_strings().iter().enumerate() {
+            let mut file = File::create(format!("benchmark{}.txt", algorithm)).unwrap();
+            write!(
+                file,
+                "{}",
+                statistics[i]
+                    .1
+                    .iter()
+                    .map(|x| format!("{}", get_milliseconds(x)))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            )
+            .unwrap();
+        }
     }
 }
 
