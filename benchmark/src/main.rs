@@ -102,6 +102,19 @@ fn main() {
             let differences =
                 validate_results(&correct_results, &statistics[i].0, g, &chosen_nodes);
             statistics[i].2 = differences;
+
+            /* for (i, d) in statistics[i].1.iter().enumerate() {
+                if d.as_millis() > 100 {
+                    println!(
+                        "{}ms for (N{},E{}) -> (N{},E{})",
+                        get_milliseconds(d),
+                        graph.get_lat(chosen_nodes[i].0),
+                        graph.get_lon(chosen_nodes[i].0),
+                        graph.get_lat(chosen_nodes[i].1),
+                        graph.get_lon(chosen_nodes[i].1),
+                    );
+                }
+            } */
         }
 
         for (i, (results, durations, differences)) in statistics.iter_mut().enumerate() {
@@ -141,9 +154,6 @@ fn measure_performance(
             ExecutionType::Dijkstra => graph.dijkstra(*start_node, *end_node, state),
             ExecutionType::BiDijkstra => graph.bi_dijkstra(*start_node, *end_node, state),
             ExecutionType::AStar => graph.a_star(*start_node, *end_node, state),
-            ExecutionType::ShortcutDijkstra => {
-                graph.shortcut_dijkstra(*start_node, *end_node, state)
-            }
             ExecutionType::ShortcutAStar => graph.shortcut_a_star(*start_node, *end_node, state),
         };
 

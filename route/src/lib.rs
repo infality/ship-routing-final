@@ -15,26 +15,16 @@ pub enum ExecutionType {
     Dijkstra,
     BiDijkstra,
     AStar,
-    ShortcutDijkstra,
     ShortcutAStar,
 }
 
 impl ExecutionType {
     pub fn get_strings() -> Vec<&'static str> {
-        vec![
-            "Dijkstra",
-            "BiDijkstra",
-            "AStar",
-            "ShortcutDijkstra",
-            "ShortcutAStar",
-        ]
+        vec!["Dijkstra", "BiDijkstra", "AStar", "ShortcutAStar"]
     }
 
     pub fn uses_shortcut(&self) -> bool {
-        matches!(
-            self,
-            ExecutionType::ShortcutDijkstra | ExecutionType::ShortcutAStar
-        )
+        matches!(self, ExecutionType::ShortcutAStar)
     }
 }
 
@@ -45,7 +35,6 @@ impl FromStr for ExecutionType {
             "dijkstra" => Ok(ExecutionType::Dijkstra),
             "bidijkstra" => Ok(ExecutionType::BiDijkstra),
             "astar" => Ok(ExecutionType::AStar),
-            "shortcutdijkstra" => Ok(ExecutionType::ShortcutDijkstra),
             "shortcutastar" => Ok(ExecutionType::ShortcutAStar),
             _ => Err(()),
         }
@@ -154,7 +143,7 @@ pub struct GEOJsonGeometry<T> {
 pub struct GEOJsonProperty {}
 
 impl Graph {
-    pub fn is_node_inside_rect(&self, node: usize, rect: (usize, usize, usize, usize)) -> bool {
+    pub fn is_node_inside_rect(&self, node: usize, rect: &(usize, usize, usize, usize)) -> bool {
         rect.0 < node % self.raster_columns_count
             && rect.1 < node / self.raster_columns_count
             && node % self.raster_columns_count < rect.2
@@ -215,9 +204,6 @@ impl Graph {
                     self.bi_dijkstra(nearest_start_node, nearest_end_node, state)
                 }
                 ExecutionType::AStar => self.a_star(nearest_start_node, nearest_end_node, state),
-                ExecutionType::ShortcutDijkstra => {
-                    self.shortcut_dijkstra(nearest_start_node, nearest_end_node, state)
-                }
                 ExecutionType::ShortcutAStar => {
                     self.shortcut_a_star(nearest_start_node, nearest_end_node, state)
                 }
@@ -421,6 +407,10 @@ impl Graph {
     pub fn generate_random_water_nodes(&self, amount: usize) -> Vec<(usize, usize)> {
         let mut water_nodes = Vec::new();
         for i in 0..(self.raster_rows_count * self.raster_columns_count) {
+            if self.get_lat(i) < -83.0 || self.get_lat(i) > 85.01 {
+                // Ignore points outside of WGS84
+                continue;
+            }
             if self.offsets[i] != self.offsets[i + 1] {
                 water_nodes.push(i);
             }
@@ -611,80 +601,6 @@ impl Graph {
         }
     }
 
-    pub fn shortcut_dijkstra(
-        &self,
-        start: usize,
-        end: usize,
-        state: &mut AlgorithmState,
-    ) -> PathResult {
-        state.reset();
-
-        state.distances[start] = 0;
-        state.queue.push(HeapNode {
-            id: start as u32,
-            distance: 0,
-        });
-
-        let mut heap_pops: usize = 0;
-        while let Some(node) = state.queue.pop() {
-            heap_pops += 1;
-
-            if node.id as usize == end {
-                let mut nodes = Vec::new();
-                let mut node = end;
-                while node != start {
-                    nodes.push(node);
-                    node = state.parent_nodes[node] as usize;
-                }
-                nodes.push(start);
-                return PathResult {
-                    path: Some(nodes),
-                    distance: Some(state.distances[end]),
-                    heap_pops,
-                };
-            }
-
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
-            {
-                let dest = self.edges[i].destination as usize;
-                let dist = self.edges[i].distance;
-                let new_distance = state.distances[node.id as usize] + dist;
-
-                if new_distance < state.distances[dest] {
-                    // Skip neighbor if it is inside a shortcut rectangle and the end node is not
-                    let mut skip = false;
-                    for rect in self.shortcut_rectangles.iter() {
-                        if self.is_node_inside_rect(dest, *rect)
-                            && !self.is_node_inside_rect(start, *rect)
-                            && !self.is_node_inside_rect(end, *rect)
-                        {
-                            skip = true;
-                            break;
-                        }
-                    }
-                    if skip {
-                        continue;
-                    }
-
-                    state.queue.push(HeapNode {
-                        id: dest as u32,
-                        distance: new_distance,
-                    });
-                    state.distances[dest] = new_distance;
-                    state.parent_nodes[dest] = node.id;
-                }
-            }
-        }
-
-        // No path found
-        PathResult {
-            path: None,
-            distance: None,
-            heap_pops,
-        }
-    }
-
     pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
@@ -764,6 +680,18 @@ impl Graph {
             distance: 0,
         });
 
+        // Determine start/end shortcut rectangle beforehand (if they are in one)
+        let mut start_rect = self.shortcut_rectangles.len();
+        let mut end_rect = self.shortcut_rectangles.len();
+        for (i, rect) in self.shortcut_rectangles.iter().enumerate() {
+            if self.is_node_inside_rect(start, rect) {
+                start_rect = i;
+            }
+            if self.is_node_inside_rect(end, rect) {
+                end_rect = i;
+            }
+        }
+
         let mut heap_pops: usize = 0;
         while let Some(node) = state.queue.pop() {
             heap_pops += 1;
@@ -791,12 +719,10 @@ impl Graph {
                 let g_value = state.distances[node.id as usize] + dist;
 
                 if g_value < state.distances[dest] {
-                    // Skip neighbor if it is inside a shortcut rectangle and the end node is not
+                    // Skip neighbor if it is inside a shortcut rectangle and the start/end node are not inside the rectangle
                     let mut skip = false;
-                    for rect in self.shortcut_rectangles.iter() {
-                        if self.is_node_inside_rect(dest, *rect)
-                            && !self.is_node_inside_rect(start, *rect)
-                            && !self.is_node_inside_rect(end, *rect)
+                    for (i, rect) in self.shortcut_rectangles.iter().enumerate() {
+                        if self.is_node_inside_rect(dest, rect) && i != start_rect && i != end_rect
                         {
                             skip = true;
                             break;

@@ -1,5 +1,10 @@
 *.bin
 *.json
 *.pbf
+perf.data
+benchmarkDijkstra.txt
+benchmarkBiDijkstra.txt
+benchmarkAStar.txt
+benchmarkShortcutAStar.txt
 target/
 benchmark.txt

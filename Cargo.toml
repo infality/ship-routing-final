@@ -6,3 +6,6 @@ members = [
     "benchmark",
     "create_shortcuts",
 ]
+
+# [profile.release]
+# debug = true
