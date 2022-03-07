@@ -11,7 +11,43 @@ struct RouteResponse {
     distance: f64,
 }
 
+/* #[derive(serde::Serialize, serde::Deserialize)]
+pub struct Graph2 {
+    pub offsets: Vec<u32>,
+    pub edges: Vec<lib::Edge>,
+    pub raster_columns_count: usize,
+    pub raster_rows_count: usize,
+    pub shortcut_rectangles: Vec<(usize, usize, usize, usize)>,
+} */
+
 fn main() {
+    /* let mut buf_reader = std::io::BufReader::new(std::fs::File::open("graph_shortcuts_old.bin").unwrap());
+    let graph: Graph2 = bincode::deserialize_from(&mut buf_reader).unwrap();
+
+    let mut graph2 = Graph {
+        offsets: Vec::new(),
+        edges: graph.edges.clone(),
+        raster_columns_count: graph.raster_columns_count,
+        raster_rows_count: graph.raster_rows_count,
+        shortcut_rectangles: graph.shortcut_rectangles.clone(),
+    };
+    for (i, offset) in graph.offsets.iter().enumerate() {
+        let mut is_in_rect = None;
+        if i < graph2.raster_rows_count * graph2.raster_columns_count {
+            for (rect_index, rect) in graph2.shortcut_rectangles.iter().enumerate() {
+                if graph2.is_node_inside_rect(i, rect) {
+                    is_in_rect = Some(rect_index);
+                    break;
+                }
+            }
+        }
+        graph2.offsets.push((*offset, is_in_rect));
+    }
+
+    graph2.write_to_binfile("graph_shortcuts.bin");
+
+    return; */
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {

@@ -454,7 +454,7 @@ impl GraphExt for Graph {
         };
 
         for (i, node) in nodes.nodes.iter().enumerate() {
-            graph.offsets.push(graph.edges.len() as u32);
+            graph.offsets.push((graph.edges.len() as u32, None));
             if !node.is_water {
                 continue;
             }
@@ -478,7 +478,7 @@ impl GraphExt for Graph {
             }
         }
         // Add another offset to the end to avoid checks on last edge iteration
-        graph.offsets.push(graph.edges.len() as u32);
+        graph.offsets.push((graph.edges.len() as u32, None));
 
         graph
     }

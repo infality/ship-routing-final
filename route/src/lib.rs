@@ -65,7 +65,7 @@ impl PartialOrd for HeapNode {
 // Graph starts at top left, outer arrays are rows
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Graph {
-    pub offsets: Vec<u32>,
+    pub offsets: Vec<(u32, Option<usize>)>, // Holds offset to edges and a bool determining if the node is inside a shortcut rectangle
     pub edges: Vec<Edge>,
     pub raster_columns_count: usize,
     pub raster_rows_count: usize,
@@ -460,8 +460,8 @@ impl Graph {
                 };
             }
 
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            for i in self.offsets[node.id as usize].0 as usize
+                ..self.offsets[node.id as usize + 1].0 as usize
             {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
@@ -538,8 +538,8 @@ impl Graph {
                 };
             }
 
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            for i in self.offsets[node.id as usize].0 as usize
+                ..self.offsets[node.id as usize + 1].0 as usize
             {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
@@ -565,8 +565,8 @@ impl Graph {
                 }
             }
 
-            for i in self.offsets[node2.id as usize] as usize
-                ..self.offsets[node2.id as usize + 1] as usize
+            for i in self.offsets[node2.id as usize].0 as usize
+                ..self.offsets[node2.id as usize + 1].0 as usize
             {
                 let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
@@ -631,8 +631,8 @@ impl Graph {
                 };
             }
 
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            for i in self.offsets[node.id as usize].0 as usize
+                ..self.offsets[node.id as usize + 1].0 as usize
             {
                 let dest = self.edges[i].destination as usize;
                 let dist = self.edges[i].distance;
@@ -711,8 +711,8 @@ impl Graph {
                 };
             }
 
-            for i in
-                self.offsets[node.id as usize] as usize..self.offsets[node.id as usize + 1] as usize
+            for i in self.offsets[node.id as usize].0 as usize
+                ..self.offsets[node.id as usize + 1].0 as usize
             {
                 let dest = self.edges[i].destination as usize;
                 let dist = self.edges[i].distance;
@@ -720,15 +720,8 @@ impl Graph {
 
                 if g_value < state.distances[dest] {
                     // Skip neighbor if it is inside a shortcut rectangle and the start/end node are not inside the rectangle
-                    let mut skip = false;
-                    for (i, rect) in self.shortcut_rectangles.iter().enumerate() {
-                        if self.is_node_inside_rect(dest, rect) && i != start_rect && i != end_rect
-                        {
-                            skip = true;
-                            break;
-                        }
-                    }
-                    if skip {
+                    let rect = self.offsets[dest].1;
+                    if rect.is_some() && rect.unwrap() != start_rect && rect.unwrap() != end_rect {
                         continue;
                     }
 

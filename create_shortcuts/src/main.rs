@@ -106,7 +106,7 @@ fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph 
 
     // Add original graph edges
     for (i, edge) in edges.lock().unwrap().iter_mut().enumerate() {
-        for e in graph.offsets[i]..graph.offsets[i + 1] {
+        for e in graph.offsets[i].0..graph.offsets[i + 1].0 {
             edge.push(graph.edges[e as usize]);
         }
     }
@@ -186,13 +186,23 @@ fn create_graph(graph: &Graph, rects: &[(usize, usize, usize, usize)]) -> Graph 
         shortcut_rectangles: rects.to_vec(),
     };
 
-    for edge in edges.lock().unwrap().iter() {
-        new_graph.offsets.push(new_graph.edges.len() as u32);
-        for edge in edge.iter() {
+    for (node_id, node_edges) in edges.lock().unwrap().iter().enumerate() {
+        let mut rect_index = None;
+        for (i, rect) in new_graph.shortcut_rectangles.iter().enumerate() {
+            if new_graph.is_node_inside_rect(node_id, rect) {
+                rect_index = Some(i);
+                break;
+            }
+        }
+
+        new_graph
+            .offsets
+            .push((new_graph.edges.len() as u32, rect_index));
+        for edge in node_edges.iter() {
             new_graph.edges.push(*edge);
         }
     }
-    new_graph.offsets.push(new_graph.edges.len() as u32);
+    new_graph.offsets.push((new_graph.edges.len() as u32, None));
 
     new_graph
 }
