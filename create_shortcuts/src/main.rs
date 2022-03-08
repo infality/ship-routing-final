@@ -6,6 +6,8 @@ use route::{
     AlgorithmState, Edge, GEOJson, GEOJsonFeature, GEOJsonGeometry, GEOJsonProperty, Graph,
 };
 
+const MAX_RECT_LENGTH: usize = 50;
+
 #[derive(serde::Serialize)]
 struct ShortcutRectangle {
     geojson: GEOJson<[Vec<[f64; 2]>; 1]>,
@@ -296,8 +298,13 @@ fn main() {
                             if left == 0 {
                                 is_left_done = true;
                             }
+                            if right - left >= MAX_RECT_LENGTH {
+                                is_left_done = true;
+                                is_right_done = true;
+                            }
                         }
                     }
+
                     if !is_top_done {
                         for col in left..=right {
                             if !is_water(&graph, col, top - 1) {
@@ -314,8 +321,13 @@ fn main() {
                             if top == 0 {
                                 is_top_done = true;
                             }
+                            if bottom - top >= MAX_RECT_LENGTH {
+                                is_top_done = true;
+                                is_bottom_done = true;
+                            }
                         }
                     }
+
                     if !is_right_done {
                         for row in top..=bottom {
                             if !is_water(&graph, right + 1, row) {
@@ -332,8 +344,13 @@ fn main() {
                             if right == graph.raster_columns_count - 1 {
                                 is_right_done = true;
                             }
+                            if right - left >= MAX_RECT_LENGTH {
+                                is_left_done = true;
+                                is_right_done = true;
+                            }
                         }
                     }
+
                     if !is_bottom_done {
                         for col in left..=right {
                             if !is_water(&graph, col, bottom + 1) {
@@ -348,6 +365,10 @@ fn main() {
                         if !is_bottom_done {
                             bottom += 1;
                             if bottom == graph.raster_rows_count - 1 {
+                                is_bottom_done = true;
+                            }
+                            if bottom - top >= MAX_RECT_LENGTH {
+                                is_top_done = true;
                                 is_bottom_done = true;
                             }
                         }

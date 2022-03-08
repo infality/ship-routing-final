@@ -55,6 +55,71 @@ fn main() {
             correct_results.push(graph.dijkstra(*start_node, *end_node, &mut state));
         }
 
+        // Print all routes in geojson format
+        if false {
+            let mut geojson = route::GEOJson {
+                r#type: "FeatureCollection",
+                features: Vec::new(),
+            };
+            for result in correct_results.iter() {
+                if result.path.is_none() {
+                    continue;
+                }
+                let mut coordinates = Vec::new();
+                for node in result.path.as_ref().unwrap().iter() {
+                    coordinates.push([graph.get_lon(*node), graph.get_lat(*node)]);
+                }
+
+                // Split up lines crossing the antimeridan
+                let mut line_start = 0;
+                let mut lon_start = 0.0;
+                for i in 1..coordinates.len() {
+                    if (coordinates[i - 1][0] - coordinates[i][0]).abs() > 180.0 {
+                        let lon_end = if coordinates[i - 1][0] < 0.0 {
+                            -180.0
+                        } else {
+                            180.0
+                        };
+
+                        let mut line_coordinates = Vec::new();
+                        if line_start > 0 {
+                            line_coordinates.push([lon_start, coordinates[line_start][1]]);
+                        }
+                        line_coordinates.extend_from_slice(&coordinates[line_start..i - 1]);
+                        line_coordinates.push([lon_end, coordinates[i - 1][1]]);
+
+                        geojson.features.push(route::GEOJsonFeature {
+                            r#type: "Feature",
+                            geometry: route::GEOJsonGeometry {
+                                r#type: "LineString",
+                                coordinates: line_coordinates,
+                            },
+                            properties: route::GEOJsonProperty {},
+                        });
+
+                        line_start = i;
+                        lon_start = -lon_end;
+                    }
+                }
+
+                let mut line_coordinates = Vec::new();
+                if line_start > 0 {
+                    line_coordinates.push([lon_start, coordinates[line_start][1]]);
+                }
+                line_coordinates.extend_from_slice(&coordinates[line_start..]);
+
+                geojson.features.push(route::GEOJsonFeature {
+                    r#type: "Feature",
+                    geometry: route::GEOJsonGeometry {
+                        r#type: "LineString",
+                        coordinates: line_coordinates,
+                    },
+                    properties: route::GEOJsonProperty {},
+                });
+            }
+            println!("{}", serde_json::to_string(&geojson).unwrap());
+        }
+
         let mut differences = validate_results(&correct_results, &results, g, &chosen_nodes);
 
         print_statistics(&mut differences, &results, &chosen_nodes, &mut durations);

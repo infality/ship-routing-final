@@ -224,14 +224,9 @@ impl Graph {
                 distance += result.distance.unwrap();
                 println!("Path length: {}", path.len());
 
-                // Add path and resolve path if shortcuts have been taken
                 for node in path.iter() {
                     coordinates.push([self.get_lon(*node), self.get_lat(*node)]);
                 }
-                coordinates.push([
-                    self.get_lon(path[path.len() - 1]),
-                    self.get_lat(path[path.len() - 1]),
-                ]);
 
                 distance += Self::calculate_distance(
                     lon1,
