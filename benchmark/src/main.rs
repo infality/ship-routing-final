@@ -35,13 +35,17 @@ fn main() {
     };
 
     let graph = Graph::new_from_binfile(&args[1]);
-    let shortcut_graph = Graph::new_from_binfile(&args[2]);
+    let shortcut_graph = if execute_all || execution_type.uses_shortcut() {
+        Some(Graph::new_from_binfile(&args[2]))
+    } else {
+        None
+    };
     let chosen_nodes = graph.generate_random_water_nodes(100);
     let mut state = AlgorithmState::new(graph.raster_columns_count * graph.raster_rows_count);
 
     if !execute_all {
         let g = if execution_type.uses_shortcut() {
-            &shortcut_graph
+            shortcut_graph.as_ref().unwrap()
         } else {
             &graph
         };
@@ -147,7 +151,7 @@ fn main() {
             println!("Measuring performance for {}", algorithm);
             let execution_type = ExecutionType::from_str(algorithm).unwrap();
             let g = if execution_type.uses_shortcut() {
-                &shortcut_graph
+                shortcut_graph.as_ref().unwrap()
             } else {
                 &graph
             };
@@ -160,7 +164,7 @@ fn main() {
             println!("Validating {}", algorithm);
             let execution_type = ExecutionType::from_str(algorithm).unwrap();
             let g = if execution_type.uses_shortcut() {
-                &shortcut_graph
+                shortcut_graph.as_ref().unwrap()
             } else {
                 &graph
             };
