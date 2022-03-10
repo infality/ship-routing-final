@@ -16,15 +16,25 @@ pub enum ExecutionType {
     BiDijkstra,
     AStar,
     ShortcutAStar,
+    ShortcutDijkstra,
 }
 
 impl ExecutionType {
     pub fn get_strings() -> Vec<&'static str> {
-        vec!["Dijkstra", "BiDijkstra", "AStar", "ShortcutAStar"]
+        vec![
+            "Dijkstra",
+            "BiDijkstra",
+            "AStar",
+            "ShortcutAStar",
+            "ShortcutDijkstra",
+        ]
     }
 
     pub fn uses_shortcut(&self) -> bool {
-        matches!(self, ExecutionType::ShortcutAStar)
+        matches!(
+            self,
+            ExecutionType::ShortcutAStar | ExecutionType::ShortcutDijkstra
+        )
     }
 }
 
@@ -36,6 +46,7 @@ impl FromStr for ExecutionType {
             "bidijkstra" => Ok(ExecutionType::BiDijkstra),
             "astar" => Ok(ExecutionType::AStar),
             "shortcutastar" => Ok(ExecutionType::ShortcutAStar),
+            "shortcutdijkstra" => Ok(ExecutionType::ShortcutDijkstra),
             _ => Err(()),
         }
     }
@@ -58,6 +69,28 @@ impl Ord for HeapNode {
 
 impl PartialOrd for HeapNode {
     fn partial_cmp(&self, other: &HeapNode) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Eq, PartialEq)]
+pub struct AStarHeapNode {
+    pub id: u32,
+    pub f_value: u32,
+    pub g_value: u32,
+}
+
+impl Ord for AStarHeapNode {
+    fn cmp(&self, other: &AStarHeapNode) -> Ordering {
+        other
+            .f_value
+            .cmp(&self.f_value)
+            .then_with(|| self.id.cmp(&other.id))
+    }
+}
+
+impl PartialOrd for AStarHeapNode {
+    fn partial_cmp(&self, other: &AStarHeapNode) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
@@ -88,6 +121,7 @@ pub struct AlgorithmState {
     pub distances: Vec<u32>,
     pub parent_nodes: Vec<u32>,
     pub queue: BinaryHeap<HeapNode>,
+    pub astar_queue: BinaryHeap<AStarHeapNode>,
 
     // Used for bidirectional algorithms
     pub distances2: Vec<u32>,
@@ -101,6 +135,7 @@ impl AlgorithmState {
             distances: vec![std::u32::MAX; node_count],
             parent_nodes: vec![std::u32::MAX; node_count],
             queue: BinaryHeap::with_capacity(node_count),
+            astar_queue: BinaryHeap::with_capacity(node_count),
 
             distances2: vec![std::u32::MAX; node_count],
             parent_nodes2: vec![std::u32::MAX; node_count],
@@ -108,7 +143,15 @@ impl AlgorithmState {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset_dijkstra(&mut self) {
+        for i in 0..self.distances.len() {
+            self.distances[i] = std::u32::MAX;
+            self.parent_nodes[i] = std::u32::MAX;
+        }
+        self.queue.clear();
+    }
+
+    pub fn reset_bi_dijkstra(&mut self) {
         for i in 0..self.distances.len() {
             self.distances[i] = std::u32::MAX;
             self.parent_nodes[i] = std::u32::MAX;
@@ -116,7 +159,16 @@ impl AlgorithmState {
             self.parent_nodes2[i] = std::u32::MAX;
         }
         self.queue.clear();
+        self.astar_queue.clear();
         self.queue2.clear();
+    }
+
+    pub fn reset_astar(&mut self) {
+        for i in 0..self.distances.len() {
+            self.distances[i] = std::u32::MAX;
+            self.parent_nodes[i] = std::u32::MAX;
+        }
+        self.astar_queue.clear();
     }
 }
 
@@ -206,6 +258,9 @@ impl Graph {
                 ExecutionType::AStar => self.a_star(nearest_start_node, nearest_end_node, state),
                 ExecutionType::ShortcutAStar => {
                     self.shortcut_a_star(nearest_start_node, nearest_end_node, state)
+                }
+                ExecutionType::ShortcutDijkstra => {
+                    self.shortcut_dijkstra(nearest_start_node, nearest_end_node, state)
                 }
             };
 
@@ -428,7 +483,7 @@ impl Graph {
     //
 
     pub fn dijkstra(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
-        state.reset();
+        state.reset_dijkstra();
 
         state.distances[start] = 0;
         state.queue.push(HeapNode {
@@ -482,7 +537,7 @@ impl Graph {
     }
 
     pub fn bi_dijkstra(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
-        state.reset();
+        state.reset_bi_dijkstra();
         let mut shortest_distance = std::u32::MAX;
         let mut middle_node = 0;
 
@@ -599,17 +654,23 @@ impl Graph {
     pub fn a_star(&self, start: usize, end: usize, state: &mut AlgorithmState) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
-        state.reset();
+        state.reset_astar();
 
         state.distances[start] = 0;
-        state.queue.push(HeapNode {
+        state.astar_queue.push(AStarHeapNode {
             id: start as u32,
-            distance: 0,
+            g_value: 0,
+            f_value: 0,
         });
 
         let mut heap_pops: usize = 0;
-        while let Some(node) = state.queue.pop() {
+        while let Some(node) = state.astar_queue.pop() {
             heap_pops += 1;
+
+            // Skip nodes that already have been explored with a smaller distance
+            if state.distances[node.id as usize] < node.g_value {
+                continue;
+            }
 
             if node.id == end as u32 {
                 let mut nodes = Vec::new();
@@ -631,15 +692,16 @@ impl Graph {
             {
                 let dest = self.edges[i].destination as usize;
                 let dist = self.edges[i].distance;
-                let g_value = state.distances[node.id as usize] + dist;
+                let g_value = node.g_value + dist;
 
                 if g_value < state.distances[dest] {
                     state.parent_nodes[dest] = node.id;
                     state.distances[dest] = g_value;
 
-                    state.queue.push(HeapNode {
+                    state.astar_queue.push(AStarHeapNode {
                         id: dest as u32,
-                        distance: g_value
+                        g_value,
+                        f_value: g_value
                             + Self::calculate_distance(
                                 self.get_lon(dest),
                                 self.get_lat(dest),
@@ -667,7 +729,98 @@ impl Graph {
     ) -> PathResult {
         let end_lon = self.get_lon(end);
         let end_lat = self.get_lat(end);
-        state.reset();
+        state.reset_astar();
+
+        state.distances[start] = 0;
+        state.astar_queue.push(AStarHeapNode {
+            id: start as u32,
+            g_value: 0,
+            f_value: 0,
+        });
+
+        // Determine start/end shortcut rectangle beforehand (if they are in one)
+        let mut start_rect = self.shortcut_rectangles.len();
+        let mut end_rect = self.shortcut_rectangles.len();
+        for (i, rect) in self.shortcut_rectangles.iter().enumerate() {
+            if self.is_node_inside_rect(start, rect) {
+                start_rect = i;
+            }
+            if self.is_node_inside_rect(end, rect) {
+                end_rect = i;
+            }
+        }
+
+        let mut heap_pops: usize = 0;
+        while let Some(node) = state.astar_queue.pop() {
+            heap_pops += 1;
+
+            // Skip nodes that already have been explored with a smaller distance
+            if state.distances[node.id as usize] < node.g_value {
+                continue;
+            }
+
+            if node.id == end as u32 {
+                let mut nodes = Vec::new();
+                let mut current_node = end;
+                while current_node != start {
+                    nodes.push(current_node);
+                    current_node = state.parent_nodes[current_node] as usize;
+                }
+                nodes.push(start);
+                return PathResult {
+                    path: Some(nodes),
+                    distance: Some(state.distances[end]),
+                    heap_pops,
+                };
+            }
+
+            for i in self.offsets[node.id as usize].0 as usize
+                ..self.offsets[node.id as usize + 1].0 as usize
+            {
+                let dest = self.edges[i].destination as usize;
+                let dist = self.edges[i].distance;
+                let g_value = node.g_value + dist;
+
+                if g_value < state.distances[dest] {
+                    // Skip neighbor if it is inside a shortcut rectangle and the start/end node are not inside the rectangle
+                    let rect = self.offsets[dest].1;
+                    if rect.is_some() && rect.unwrap() != start_rect && rect.unwrap() != end_rect {
+                        continue;
+                    }
+
+                    state.parent_nodes[dest] = node.id;
+                    state.distances[dest] = g_value;
+
+                    state.astar_queue.push(AStarHeapNode {
+                        id: dest as u32,
+                        g_value,
+                        f_value: g_value
+                            + Self::calculate_distance(
+                                self.get_lon(dest),
+                                self.get_lat(dest),
+                                end_lon,
+                                end_lat,
+                            ),
+                    });
+                }
+            }
+        }
+
+        // No path found
+        PathResult {
+            path: None,
+            distance: None,
+            heap_pops,
+        }
+    }
+
+    pub fn shortcut_dijkstra(
+        &self,
+        start: usize,
+        end: usize,
+        state: &mut AlgorithmState,
+    ) -> PathResult {
+        state.reset_dijkstra();
 
         state.distances[start] = 0;
         state.queue.push(HeapNode {
@@ -691,12 +844,12 @@ impl Graph {
         while let Some(node) = state.queue.pop() {
             heap_pops += 1;
 
-            if node.id == end as u32 {
+            if node.id as usize == end {
                 let mut nodes = Vec::new();
-                let mut current_node = end;
-                while current_node != start {
-                    nodes.push(current_node);
-                    current_node = state.parent_nodes[current_node] as usize;
+                let mut node = end;
+                while node != start {
+                    nodes.push(node);
+                    node = state.parent_nodes[node] as usize;
                 }
                 nodes.push(start);
                 return PathResult {
@@ -709,30 +862,23 @@ impl Graph {
             for i in self.offsets[node.id as usize].0 as usize
                 ..self.offsets[node.id as usize + 1].0 as usize
             {
-                let dest = self.edges[i].destination as usize;
+                let dest = self.edges[i].destination;
                 let dist = self.edges[i].distance;
-                let g_value = state.distances[node.id as usize] + dist;
+                let new_distance = state.distances[node.id as usize] + dist;
 
-                if g_value < state.distances[dest] {
+                if new_distance < state.distances[dest as usize] {
                     // Skip neighbor if it is inside a shortcut rectangle and the start/end node are not inside the rectangle
-                    let rect = self.offsets[dest].1;
+                    let rect = self.offsets[dest as usize].1;
                     if rect.is_some() && rect.unwrap() != start_rect && rect.unwrap() != end_rect {
                         continue;
                     }
 
-                    state.parent_nodes[dest] = node.id;
-                    state.distances[dest] = g_value;
-
                     state.queue.push(HeapNode {
-                        id: dest as u32,
-                        distance: g_value
-                            + Self::calculate_distance(
-                                self.get_lon(dest),
-                                self.get_lat(dest),
-                                end_lon,
-                                end_lat,
-                            ),
+                        id: dest,
+                        distance: new_distance,
                     });
+                    state.distances[dest as usize] = new_distance;
+                    state.parent_nodes[dest as usize] = node.id;
                 }
             }
         }

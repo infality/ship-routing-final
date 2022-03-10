@@ -224,6 +224,9 @@ fn measure_performance(
             ExecutionType::BiDijkstra => graph.bi_dijkstra(*start_node, *end_node, state),
             ExecutionType::AStar => graph.a_star(*start_node, *end_node, state),
             ExecutionType::ShortcutAStar => graph.shortcut_a_star(*start_node, *end_node, state),
+            ExecutionType::ShortcutDijkstra => {
+                graph.shortcut_dijkstra(*start_node, *end_node, state)
+            }
         };
 
         let end = Instant::now();

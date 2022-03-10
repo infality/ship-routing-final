@@ -6,5 +6,6 @@ benchmarkDijkstra.txt
 benchmarkBiDijkstra.txt
 benchmarkAStar.txt
 benchmarkShortcutAStar.txt
+benchmarkShortcutDijkstra.txt
 target/
 benchmark.txt
