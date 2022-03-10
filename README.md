@@ -12,6 +12,7 @@ For the algorithm you can choose between following:
 * BiDijkstra
 * AStar
 * ShortcutAStar
+* ShortcutDijkstra
 
 ## Shortcut creation
 
@@ -27,6 +28,7 @@ For the algorithm you can choose between following:
 * BiDijkstra
 * AStar
 * ShortcutAStar
+* ShortcutDijkstra
 * All
 If `All` is chosen all algorithms are tested consecutively using the same 100 queries.
 
