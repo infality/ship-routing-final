@@ -454,6 +454,27 @@ impl Graph {
             )) as u32
     }
 
+    pub fn manhattan_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> u32 {
+        let plon_rad = lon1.to_radians();
+        let plat_rad = lat1.to_radians();
+        let qlon_rad = lon2.to_radians();
+        let qlat_rad = lat2.to_radians();
+        // Choose the latitude closer to a pole to ensure a admissible heuristic
+        let lat_rad = if lat1.abs() >= lat2.abs() {
+            plat_rad
+        } else {
+            qlat_rad
+        };
+
+        (6371000.0
+            * (
+                // lon equal
+                f64::acos(plat_rad.cos() * qlat_rad.cos() + plat_rad.sin() * qlat_rad.sin())
+                // lat equal
+                + f64::acos(lat_rad.cos().powi(2) * (plon_rad - qlon_rad).cos() + lat_rad.sin().powi(2))
+            )) as u32
+    }
+
     pub fn generate_random_water_nodes(&self, amount: usize) -> Vec<(usize, usize)> {
         let mut water_nodes = Vec::new();
         for i in 0..(self.raster_rows_count * self.raster_columns_count) {
@@ -702,7 +723,7 @@ impl Graph {
                         id: dest as u32,
                         g_value,
                         f_value: g_value
-                            + Self::calculate_distance(
+                            + Self::manhattan_distance(
                                 self.get_lon(dest),
                                 self.get_lat(dest),
                                 end_lon,
@@ -795,7 +816,7 @@ impl Graph {
                         id: dest as u32,
                         g_value,
                         f_value: g_value
-                            + Self::calculate_distance(
+                            + Self::manhattan_distance(
                                 self.get_lon(dest),
                                 self.get_lat(dest),
                                 end_lon,
