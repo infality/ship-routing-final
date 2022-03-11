@@ -30,7 +30,9 @@ For the algorithm you can choose between following:
 * ShortcutAStar
 * ShortcutDijkstra
 * All
+
 If `All` is chosen all algorithms are tested consecutively using the same 100 queries.
 
+The program prints statistics of the executed algorithms to the consoles including runtimes, heap pops and the difference in distance to the shortest path of the Dijkstra dijkstra algorithm.
 After benchmarking one or multiple text files are created which can be copied to the `benchmarks` directory and then visualized using the gnuplot script with `gnuplot -p <path to boxplot.gnu>`.
 
